@@ -1,5 +1,17 @@
-import { useEffect, useState } from 'react'
-import { BookOpen, Plus, Trash2 } from 'lucide-react'
+import {
+  useEffect,
+  useState,
+  type FormEvent,
+} from 'react'
+
+import {
+  BookOpen,
+  Music2,
+  Plus,
+  Trash2,
+} from 'lucide-react'
+
+import { usePlayerStore } from '@/features/player/player-store'
 
 type JournalEntry = {
   id: string
@@ -10,14 +22,27 @@ type JournalEntry = {
 }
 
 export function JournalPage() {
-  // Values currently typed inside the form
+  /*
+    Get the currently selected track from the player store.
+  */
+  const currentTrack = usePlayerStore(
+    (state) => state.currentTrack,
+  )
+
+  /*
+    Form input states.
+  */
   const [song, setSong] = useState('')
   const [artist, setArtist] = useState('')
   const [note, setNote] = useState('')
 
-  // Load previously saved entries when the page first opens
+  /*
+    Load saved entries from localStorage when the page opens.
+  */
   const [entries, setEntries] = useState<JournalEntry[]>(() => {
-    const savedEntries = localStorage.getItem('soundtrail-journal')
+    const savedEntries = localStorage.getItem(
+      'soundtrail-journal',
+    )
 
     if (!savedEntries) {
       return []
@@ -30,7 +55,9 @@ export function JournalPage() {
     }
   })
 
-  // Save entries whenever the entries array changes
+  /*
+    Save the journal whenever entries change.
+  */
   useEffect(() => {
     localStorage.setItem(
       'soundtrail-journal',
@@ -38,11 +65,29 @@ export function JournalPage() {
     )
   }, [entries])
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  /*
+    Fill the song and artist fields using the track
+    currently selected in the player.
+  */
+  const handleUseCurrentTrack = () => {
+    if (!currentTrack) {
+      return
+    }
+
+    setSong(currentTrack.title)
+    setArtist(currentTrack.artistName)
+  }
+
+  const handleSubmit = (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault()
 
-    // Do not create an entry if required fields are empty
-    if (!song.trim() || !artist.trim() || !note.trim()) {
+    if (
+      !song.trim() ||
+      !artist.trim() ||
+      !note.trim()
+    ) {
       return
     }
 
@@ -54,13 +99,11 @@ export function JournalPage() {
       createdAt: new Date().toLocaleDateString(),
     }
 
-    // Put the newest entry at the beginning
     setEntries((currentEntries) => [
       newEntry,
       ...currentEntries,
     ])
 
-    // Clear the form
     setSong('')
     setArtist('')
     setNote('')
@@ -68,7 +111,9 @@ export function JournalPage() {
 
   const handleDeleteEntry = (entryId: string) => {
     setEntries((currentEntries) =>
-      currentEntries.filter((entry) => entry.id !== entryId),
+      currentEntries.filter(
+        (entry) => entry.id !== entryId,
+      ),
     )
   }
 
@@ -84,91 +129,143 @@ export function JournalPage() {
         </div>
 
         <p className="mt-3 text-white/60">
-          Save the songs, moments and feelings you want to remember.
+          Save the songs, moments and feelings you want to
+          remember.
         </p>
       </header>
 
       <section className="grid gap-8 xl:grid-cols-[420px_1fr]">
-        {/* New journal entry form */}
-        <form
-          onSubmit={handleSubmit}
-          className="h-fit space-y-5 rounded-2xl border border-white/10 bg-white/5 p-6"
-        >
-          <div>
-            <h2 className="text-xl font-semibold text-white">
-              New entry
-            </h2>
-
-            <p className="mt-1 text-sm text-white/50">
-              Write down what a song made you feel.
+        <div className="space-y-5">
+          {/* Currently playing track */}
+          <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <p className="text-sm font-medium uppercase tracking-[0.18em] text-white/40">
+              Current track
             </p>
-          </div>
 
-          <div>
-            <label
-              htmlFor="song"
-              className="mb-2 block text-sm font-medium text-white/70"
-            >
-              Song
-            </label>
+            {currentTrack ? (
+              <div className="mt-4 flex items-center gap-4">
+                <img
+                  src={currentTrack.artworkUrl}
+                  alt={currentTrack.albumTitle}
+                  className="h-16 w-16 rounded-xl object-cover"
+                />
 
-            <input
-              id="song"
-              type="text"
-              value={song}
-              onChange={(event) => setSong(event.target.value)}
-              placeholder="Paper Moon"
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-pink-500"
-            />
-          </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-white">
+                    {currentTrack.title}
+                  </p>
 
-          <div>
-            <label
-              htmlFor="artist"
-              className="mb-2 block text-sm font-medium text-white/70"
-            >
-              Artist
-            </label>
+                  <p className="truncate text-sm text-white/50">
+                    {currentTrack.artistName}
+                  </p>
+                </div>
 
-            <input
-              id="artist"
-              type="text"
-              value={artist}
-              onChange={(event) => setArtist(event.target.value)}
-              placeholder="Luna Vale"
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-pink-500"
-            />
-          </div>
+                <button
+                  type="button"
+                  onClick={handleUseCurrentTrack}
+                  className="rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                >
+                  Use track
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4 flex items-center gap-3 text-white/40">
+                <Music2 className="h-5 w-5" />
 
-          <div>
-            <label
-              htmlFor="note"
-              className="mb-2 block text-sm font-medium text-white/70"
-            >
-              Your thoughts
-            </label>
+                <p className="text-sm">
+                  Play a song to use it in your journal.
+                </p>
+              </div>
+            )}
+          </section>
 
-            <textarea
-              id="note"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="This song reminds me of..."
-              rows={5}
-              className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-pink-500"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 font-semibold text-black transition hover:bg-white/90"
+          {/* Journal form */}
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-5 rounded-2xl border border-white/10 bg-white/5 p-6"
           >
-            <Plus className="h-5 w-5" />
-            Add entry
-          </button>
-        </form>
+            <div>
+              <h2 className="text-xl font-semibold text-white">
+                New entry
+              </h2>
 
-        {/* Saved journal entries */}
-        <div>
+              <p className="mt-1 text-sm text-white/50">
+                Write down what a song made you feel.
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="song"
+                className="mb-2 block text-sm font-medium text-white/70"
+              >
+                Song
+              </label>
+
+              <input
+                id="song"
+                type="text"
+                value={song}
+                onChange={(event) =>
+                  setSong(event.target.value)
+                }
+                placeholder="Paper Moon"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-pink-500"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="artist"
+                className="mb-2 block text-sm font-medium text-white/70"
+              >
+                Artist
+              </label>
+
+              <input
+                id="artist"
+                type="text"
+                value={artist}
+                onChange={(event) =>
+                  setArtist(event.target.value)
+                }
+                placeholder="Luna Vale"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-pink-500"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="note"
+                className="mb-2 block text-sm font-medium text-white/70"
+              >
+                Your thoughts
+              </label>
+
+              <textarea
+                id="note"
+                value={note}
+                onChange={(event) =>
+                  setNote(event.target.value)
+                }
+                placeholder="This song reminds me of..."
+                rows={5}
+                className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-pink-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 font-semibold text-black transition hover:bg-white/90"
+            >
+              <Plus className="h-5 w-5" />
+              Add entry
+            </button>
+          </form>
+        </div>
+
+        {/* Saved entries */}
+        <section>
           <h2 className="mb-5 text-2xl font-semibold text-white">
             Your entries
           </h2>
@@ -205,9 +302,11 @@ export function JournalPage() {
 
                     <button
                       type="button"
-                      onClick={() => handleDeleteEntry(entry.id)}
+                      onClick={() =>
+                        handleDeleteEntry(entry.id)
+                      }
                       aria-label={`Delete ${entry.song} entry`}
-                      className="rounded-lg p-2 text-white/40 transition hover:bg-white/10 hover:text-white"
+                      className="rounded-lg p-2 text-white/40 transition hover:bg-white/10 hover:text-red-300"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -224,7 +323,7 @@ export function JournalPage() {
               ))}
             </div>
           )}
-        </div>
+        </section>
       </section>
     </div>
   )
