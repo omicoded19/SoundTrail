@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Compass, Disc3, Heart, Home, LineChart, ListMusic, Sparkles, BookOpen } from 'lucide-react'
+import { Compass, Disc3, Heart, Home, LineChart, ListMusic, Settings as SettingsIcon, Sparkles, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { NAV_ITEMS } from '@/lib/constants'
 
@@ -11,6 +11,9 @@ const iconMap = {
   'AI DJ': Sparkles,
   Insights: LineChart,
   Playlists: ListMusic,
+  Settings: SettingsIcon,
+
+  
 } as const
 
 export function Sidebar() {

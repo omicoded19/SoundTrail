@@ -25,4 +25,5 @@ export const NAV_ITEMS: {
   { to: '/insights', label: 'Insights', mobileLabel: 'Insights' },
   { to: '/liked', label: 'Liked Songs', mobileLabel: 'Liked' },
   { to: '/playlists', label: 'Playlists', mobileLabel: 'Playlists' },
+  { to: '/settings', label: 'Settings', mobileLabel: 'Settings' },
 ]

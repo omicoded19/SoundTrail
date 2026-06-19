@@ -8,6 +8,7 @@ import { AIDJPage } from '@/pages/AIDJPage'
 import { InsightsPage } from '@/pages/InsightsPage'
 import { LikedSongsPage } from '@/pages/LikedSongsPage'
 import { PlaylistsPage } from '@/pages/PlaylistsPage'
+import { SettingsPage } from '@/pages/SettingsPage'
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -40,7 +41,11 @@ export const router = createBrowserRouter([
       {
         path: 'playlists',
         element: <PlaylistsPage />,
-      }
+      },
+      {
+        path: 'settings',
+        element: <SettingsPage />,
+      },
 
     ],
   },
