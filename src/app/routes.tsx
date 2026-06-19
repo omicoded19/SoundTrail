@@ -6,6 +6,7 @@ import { DiscoverPage } from '@/pages/DiscoverPage'
 import { JournalPage } from '@/pages/JournalPage'
 import { AIDJPage } from '@/pages/AIDJPage'
 import { InsightsPage } from '@/pages/InsightsPage'
+import { LikedSongsPage } from '@/pages/LikedSongsPage'
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -30,6 +31,10 @@ export const router = createBrowserRouter([
       {
         path: 'insights',
         element: <InsightsPage />,
+      },
+      {
+        path: 'liked',
+        element: <LikedSongsPage />,
       },
     ],
   },

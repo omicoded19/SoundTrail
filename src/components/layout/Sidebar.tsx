@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Compass, Disc3, Home, LineChart, Sparkles, BookOpen } from 'lucide-react'
+import { Compass, Disc3, Heart, Home, LineChart, Sparkles, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { NAV_ITEMS } from '@/lib/constants'
 
@@ -7,6 +7,7 @@ const iconMap = {
   Home,
   Discover: Compass,
   Journal: BookOpen,
+  'Liked Songs': Heart,
   'AI DJ': Sparkles,
   Insights: LineChart,
 } as const
