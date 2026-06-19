@@ -41,7 +41,7 @@ export function ArtistHero({ artist }: ArtistHeroProps) {
         initial={{ opacity: 0, scale: 1.06 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-        className="absolute bottom-0 right-[-12%] h-[88%] w-[95%] object-cover object-top sm:right-[-4%] sm:w-[78%] lg:right-[-10%] lg:h-[96%] lg:w-[82%]"
+        className="absolute inset-0 h-full w-full object-cover object-top"
         style={{
           /*
             Mask makes the image fade into the background.
