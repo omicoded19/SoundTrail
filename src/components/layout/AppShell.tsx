@@ -13,11 +13,17 @@ import {
 } from '@/features/theme/theme'
 
 export function AppShell() {
+  /*
+    Keeps the mock player progress moving while a track
+    is marked as playing.
+  */
   useSimulatedPlayback()
 
   /*
-    Load and apply the saved accent colour when
-    the application first opens.
+    Runs once when the application loads.
+
+    It reads the saved theme from localStorage
+    and applies it to the root HTML element.
   */
   useEffect(() => {
     const savedTheme = getSavedAccentTheme()
@@ -34,6 +40,7 @@ export function AppShell() {
       </main>
 
       <BottomMusicPlayer />
+
       <MobileNav />
     </div>
   )

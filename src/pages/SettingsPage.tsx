@@ -7,7 +7,6 @@ import {
 } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
-
 import { usePlayerStore } from '@/features/player/player-store'
 
 import {
@@ -20,21 +19,42 @@ import {
 
 export function SettingsPage() {
   /*
-    Load the currently saved accent theme.
+    Stores the currently selected accent theme.
+
+    The initial value comes from localStorage.
   */
   const [selectedAccent, setSelectedAccent] =
     useState<AccentTheme>(() => getSavedAccentTheme())
 
+  /*
+    Read the current player volume from Zustand.
+
+    Volume is stored between 0 and 1:
+    0    = 0%
+    0.5  = 50%
+    1    = 100%
+  */
   const volume = usePlayerStore(
     (state) => state.volume,
   )
 
+  /*
+    Function from the player store used
+    to change the volume.
+  */
   const setVolume = usePlayerStore(
     (state) => state.setVolume,
   )
 
+  /*
+    Convert values such as 0.75 into 75
+    so they can be displayed as percentages.
+  */
   const volumePercentage = Math.round(volume * 100)
 
+  /*
+    Runs when the user selects an accent colour.
+  */
   const handleAccentChange = (
     accent: AccentTheme,
   ) => {
@@ -42,6 +62,10 @@ export function SettingsPage() {
     applyAccentTheme(accent)
   }
 
+  /*
+    Restore the default rose theme
+    and 75% player volume.
+  */
   const handleResetSettings = () => {
     handleAccentChange(DEFAULT_ACCENT_THEME)
     setVolume(0.75)
@@ -60,7 +84,7 @@ export function SettingsPage() {
       </header>
 
       <div className="grid gap-8 xl:grid-cols-2">
-        {/* Accent colour settings */}
+        {/* Accent colour section */}
         <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-[var(--accent-soft)] p-3">
@@ -97,6 +121,7 @@ export function SettingsPage() {
                       : 'border-white/10 bg-black/10 hover:border-white/30 hover:bg-white/5',
                   )}
                 >
+                  {/* Colour preview circle */}
                   <span
                     className="h-11 w-11 shrink-0 rounded-full shadow-lg"
                     style={{
@@ -114,6 +139,7 @@ export function SettingsPage() {
                     </span>
                   </span>
 
+                  {/* Show check icon on the selected theme */}
                   {isSelected && (
                     <Check className="h-5 w-5 shrink-0 text-[var(--accent)]" />
                   )}
@@ -123,7 +149,7 @@ export function SettingsPage() {
           </div>
         </section>
 
-        {/* Volume setting */}
+        {/* Player volume section */}
         <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-[var(--accent-soft)] p-3">
@@ -174,7 +200,7 @@ export function SettingsPage() {
         </section>
       </div>
 
-      {/* Reset settings */}
+      {/* Reset section */}
       <section className="flex flex-col justify-between gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-lg font-semibold text-white">
