@@ -19,8 +19,8 @@ export const NAV_ITEMS: {
   disabled?: boolean
 }[] = [
   { to: '/', label: 'Home', mobileLabel: 'Home' },
-  { to: '/discover', label: 'Discover', mobileLabel: 'Discover', disabled: true },
-  { to: '/journal', label: 'Journal', mobileLabel: 'Journal', disabled: true },
-  { to: '/ai-dj', label: 'AI DJ', mobileLabel: 'AI DJ', disabled: true },
-  { to: '/insights', label: 'Insights', mobileLabel: 'Insights', disabled: true },
+  { to: '/discover', label: 'Discover', mobileLabel: 'Discover' },
+  { to: '/journal', label: 'Journal', mobileLabel: 'Journal' },
+  { to: '/ai-dj', label: 'AI DJ', mobileLabel: 'AI DJ' },
+  { to: '/insights', label: 'Insights', mobileLabel: 'Insights' },
 ]

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'motion/react'
 import { Plus, Star } from 'lucide-react'
+
 import type { Artist } from '@/types/artist'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/cn'
@@ -16,66 +17,101 @@ export function ArtistHero({ artist }: ArtistHeroProps) {
   return (
     <motion.section
       key={artist.id}
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      className="relative flex min-h-[320px] flex-col justify-end overflow-hidden md:min-h-[420px] lg:min-h-[520px] lg:w-[42%] lg:shrink-0"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.45 }}
+      className="relative min-h-[500px] overflow-hidden lg:min-h-[calc(100dvh-96px)] lg:w-[52%]"
       aria-label={`${artist.name} artist profile`}
     >
+      {/* Background gradient based on the selected artist */}
       <motion.div
         className="absolute inset-0"
         animate={{
-          background: `linear-gradient(160deg, ${artist.accentColor} 0%, ${artist.accentColorDark} 55%, #0a0a0a 100%)`,
+          background: `linear-gradient(155deg, ${artist.accentColor} 0%, ${artist.accentColorDark} 100%)`,
         }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.45 }}
         aria-hidden="true"
       />
 
-      <div className="relative flex flex-1 items-end px-6 pb-8 pt-16 md:px-10 md:pb-10">
-        <motion.img
-          key={artist.portraitUrl}
-          src={artist.portraitUrl}
-          alt={artist.name}
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="absolute bottom-0 left-1/2 h-[85%] max-h-[480px] w-auto max-w-[90%] -translate-x-1/2 object-cover object-top drop-shadow-2xl md:left-auto md:right-4 md:translate-x-0 lg:right-8"
-        />
+      {/* Large artist image */}
+      <motion.img
+        key={artist.portraitUrl}
+        src={artist.portraitUrl}
+        alt={artist.name}
+        initial={{ opacity: 0, scale: 1.06 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        className="absolute bottom-0 right-[-12%] h-[88%] w-[95%] object-cover object-top sm:right-[-4%] sm:w-[78%] lg:right-[-10%] lg:h-[96%] lg:w-[82%]"
+        style={{
+          /*
+            Mask makes the image fade into the background.
+            This prevents the image from looking like a rectangular card.
+          */
+          WebkitMaskImage:
+            'linear-gradient(to bottom, black 0%, black 72%, transparent 100%), linear-gradient(to right, transparent 0%, black 24%, black 100%)',
+          WebkitMaskComposite: 'source-in',
+          maskImage:
+            'linear-gradient(to bottom, black 0%, black 72%, transparent 100%), linear-gradient(to right, transparent 0%, black 24%, black 100%)',
+          maskComposite: 'intersect',
+        }}
+      />
 
-        <div className="relative z-10 max-w-full">
-          <motion.h1
-            key={artist.name}
-            initial={{ opacity: 0, x: -12 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="text-5xl font-extrabold leading-[0.95] tracking-tight text-white drop-shadow-lg sm:text-6xl md:text-7xl lg:text-8xl"
-          >
+      {/* Dark overlay so white text stays readable */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.32)_0%,rgba(0,0,0,0.04)_58%),linear-gradient(0deg,rgba(0,0,0,0.58)_0%,transparent_52%)]"
+        aria-hidden="true"
+      />
+
+      {/* Text content */}
+      <div className="relative z-10 flex min-h-[500px] flex-col justify-end px-6 pb-10 pt-20 sm:px-10 sm:pb-12 lg:min-h-[calc(100dvh-96px)] lg:px-12 lg:pb-16 xl:px-14">
+        <motion.div
+          key={artist.name}
+          initial={{ opacity: 0, x: -18 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, delay: 0.08 }}
+          className="max-w-[92%]"
+        >
+          {/* Huge artist name like the reference UI */}
+          <h1 className="max-w-[700px] text-6xl font-extrabold leading-[0.86] tracking-[-0.055em] text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.3)] sm:text-7xl lg:text-[clamp(4.8rem,7vw,8rem)]">
             {artist.name}
-          </motion.h1>
+          </h1>
 
-          <div className="mt-4 flex items-center gap-2">
+          {/* Minimal action buttons */}
+          <div className="mt-6 flex items-center gap-3">
             <Button
               variant="icon"
               size="sm"
               aria-label={isFollowing ? 'Unfollow artist' : 'Follow artist'}
               aria-pressed={isFollowing}
               onClick={() => setIsFollowing((value) => !value)}
-              className={cn(isFollowing && 'bg-white/15 text-white')}
+              className={cn(
+                'border border-white/30 bg-black/25 text-white hover:bg-black/40',
+                isFollowing && 'bg-white text-black hover:bg-white/90',
+              )}
             >
-              <Plus className={cn('h-5 w-5', isFollowing && 'rotate-45')} />
+              <Plus
+                className={cn(
+                  'h-5 w-5 transition-transform',
+                  isFollowing && 'rotate-45',
+                )}
+              />
             </Button>
+
             <Button
               variant="icon"
               size="sm"
               aria-label={isFavourite ? 'Remove from favourites' : 'Favourite artist'}
               aria-pressed={isFavourite}
               onClick={() => setIsFavourite((value) => !value)}
-              className={cn(isFavourite && 'text-amber-300')}
+              className={cn(
+                'border border-white/30 bg-black/25 text-white hover:bg-black/40',
+                isFavourite && 'bg-white text-black hover:bg-white/90',
+              )}
             >
               <Star className={cn('h-5 w-5', isFavourite && 'fill-current')} />
             </Button>
           </div>
-        </div>
+        </motion.div>
       </div>
     </motion.section>
   )
