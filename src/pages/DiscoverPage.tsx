@@ -1,258 +1,285 @@
-import { useState } from 'react'
-import { Play, Search } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-
+import { useEffect, useState } from 'react'
 import {
-  albums,
-  artists,
-  getTrackById,
-} from '@/data'
+  AlertCircle,
+  LoaderCircle,
+  MapPin,
+  Search,
+  UserRound,
+} from 'lucide-react'
 
-import { useArtistStore } from '@/features/artist/artist-store'
-import { usePlayerStore } from '@/features/player/player-store'
+interface MusicBrainzArtist {
+  id: string
+  name: string
+  type?: string
+  country?: string
+  disambiguation?: string
+  score?: number
+  area?: {
+    id: string
+    name: string
+    type?: string
+  }
+}
 
-import type { Track } from '@/types/track'
+interface MusicBrainzResponse {
+  artists?: MusicBrainzArtist[]
+}
+
+function getArtistInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase()
+}
 
 export function DiscoverPage() {
-  /*
-    Stores whatever the user types into the search bar.
-  */
-  const [search, setSearch] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [artists, setArtists] = useState<MusicBrainzArtist[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  /*
-    navigate lets us move to another route using TypeScript code.
-  */
-  const navigate = useNavigate()
+  useEffect(() => {
+    const trimmedQuery = searchQuery.trim()
 
-  /*
-    Changes the artist currently displayed on the Home page.
-  */
-  const setActiveArtistId = useArtistStore(
-    (state) => state.setActiveArtistId,
-  )
-
-  /*
-    Starts a track and loads a queue into the bottom player.
-  */
-  const playTrack = usePlayerStore(
-    (state) => state.playTrack,
-  )
-
-  /*
-    Lowercase makes searching case-insensitive.
-
-    "LUNA", "Luna", and "luna" will produce the same result.
-  */
-  const searchText = search.toLowerCase().trim()
-
-  /*
-    Keep artists whose names contain the search text.
-  */
-  const filteredArtists = artists.filter((artist) =>
-    artist.name.toLowerCase().includes(searchText),
-  )
-
-  /*
-    Keep albums whose album title or artist name
-    contains the search text.
-  */
-  const filteredAlbums = albums.filter((album) => {
-    const albumArtist = artists.find(
-      (artist) => artist.id === album.artistId,
-    )
-
-    const matchesAlbumTitle = album.title
-      .toLowerCase()
-      .includes(searchText)
-
-    const matchesArtistName = albumArtist?.name
-      .toLowerCase()
-      .includes(searchText)
-
-    return matchesAlbumTitle || matchesArtistName
-  })
-
-  /*
-    Open an artist on the Home page.
-  */
-  const handleSelectArtist = (artistId: string) => {
-    setActiveArtistId(artistId)
-    navigate('/')
-  }
-
-  /*
-    Play an album without opening its details page.
-  */
-  const handlePlayAlbum = (albumId: string) => {
-    const selectedAlbum = albums.find(
-      (album) => album.id === albumId,
-    )
-
-    if (!selectedAlbum) {
+    // Do not search for an empty or one-character query.
+    if (trimmedQuery.length < 2) {
+      setArtists([])
+      setError(null)
+      setIsLoading(false)
       return
     }
 
-    /*
-      Convert the album's track IDs into complete Track objects.
-    */
-    const albumTracks = selectedAlbum.trackIds
-      .map((trackId) => getTrackById(trackId))
-      .filter((track): track is Track => Boolean(track))
+    const controller = new AbortController()
 
-    const firstTrack = albumTracks[0]
+    setIsLoading(true)
+    setError(null)
 
-    if (firstTrack) {
-      playTrack(firstTrack, albumTracks)
+    // Wait until the user has stopped typing.
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          query: trimmedQuery,
+          fmt: 'json',
+          limit: '12',
+          dismax: 'true',
+        })
+
+        const response = await fetch(
+          `https://musicbrainz.org/ws/2/artist/?${params.toString()}`,
+          {
+            signal: controller.signal,
+            headers: {
+              Accept: 'application/json',
+            },
+          },
+        )
+
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`)
+        }
+
+        const data = (await response.json()) as MusicBrainzResponse
+
+        setArtists(data.artists ?? [])
+      } catch (requestError) {
+        // Aborting is expected when the user types another character.
+        if (
+          requestError instanceof DOMException &&
+          requestError.name === 'AbortError'
+        ) {
+          return
+        }
+
+        console.error('MusicBrainz search failed:', requestError)
+
+        setArtists([])
+        setError('We could not load artists. Please try again.')
+      } finally {
+        // Avoid updating state after this request has been cancelled.
+        if (!controller.signal.aborted) {
+          setIsLoading(false)
+        }
+      }
+    }, 1000)
+
+    // Runs before the Effect executes again and when the page unmounts.
+    return () => {
+      window.clearTimeout(timeoutId)
+      controller.abort()
     }
-  }
+  }, [searchQuery])
+
+  const hasSearchQuery = searchQuery.trim().length >= 2
 
   return (
-    <div className="min-h-screen space-y-10 p-8 pb-32">
-      <header>
-        <h1 className="text-5xl font-bold text-white">
-          Discover
-        </h1>
+    <main className="min-h-screen px-6 py-10 lg:px-12">
+      <section className="mx-auto max-w-6xl">
+        <div className="mb-10">
+          <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-violet-400">
+            Discover
+          </p>
 
-        <p className="mt-2 text-white/60">
-          Find new artists, albums and sounds you&apos;ll love.
-        </p>
-      </header>
+          <h1 className="text-4xl font-bold text-white md:text-5xl">
+            Find your next favourite artist
+          </h1>
 
-      {/* Search bar */}
-      <div className="relative">
-        <Search
-          className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-white/30"
-          aria-hidden="true"
-        />
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60 md:text-base">
+            Search for artists from around the world using MusicBrainz.
+          </p>
+        </div>
 
-        <input
-          type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search artists or albums..."
-          className="w-full rounded-xl border border-white/10 bg-white/5 py-4 pl-14 pr-5 text-white outline-none transition placeholder:text-white/30 focus:border-[var(--accent)]"
-        />
-      </div>
+        <div className="relative max-w-2xl">
+          <Search
+            className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-white/40"
+            size={21}
+          />
 
-      {/* Artists */}
-      <section>
-        <h2 className="mb-5 text-2xl font-semibold text-white">
-          Trending Artists
-        </h2>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search for Arijit Singh, Coldplay, Adele..."
+            className="h-14 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-14 pr-14 text-white outline-none transition placeholder:text-white/30 focus:border-violet-400/60 focus:bg-white/[0.09] focus:ring-4 focus:ring-violet-500/10"
+          />
 
-        {filteredArtists.length > 0 ? (
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-            {filteredArtists.map((artist) => (
-              <button
-                key={artist.id}
-                type="button"
-                onClick={() => handleSelectArtist(artist.id)}
-                className="rounded-2xl border border-white/10 bg-white/5 p-5 text-left transition hover:-translate-y-1 hover:bg-white/10"
-              >
-                <img
-                  src={artist.portraitUrl}
-                  alt={artist.name}
-                  className="mb-4 h-44 w-full rounded-xl object-cover"
-                />
+          {isLoading && (
+            <LoaderCircle
+              className="absolute right-5 top-1/2 -translate-y-1/2 animate-spin text-violet-400"
+              size={21}
+            />
+          )}
+        </div>
 
-                <h3 className="font-semibold text-white">
-                  {artist.name}
-                </h3>
+        <div className="mt-10">
+          {!hasSearchQuery && (
+            <div className="flex min-h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.02] px-6 text-center">
+              <div className="mb-4 flex size-14 items-center justify-center rounded-full bg-violet-500/10">
+                <Search className="text-violet-400" size={25} />
+              </div>
 
-                <p className="mt-1 text-sm text-white/50">
-                  Artist
+              <h2 className="text-lg font-semibold text-white">
+                Search for an artist
+              </h2>
+
+              <p className="mt-2 max-w-md text-sm text-white/50">
+                Enter at least two characters to start exploring real
+                MusicBrainz artist results.
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <div
+              role="alert"
+              className="flex items-start gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-5 text-red-200"
+            >
+              <AlertCircle className="mt-0.5 shrink-0" size={20} />
+
+              <div>
+                <h2 className="font-semibold">Artist search failed</h2>
+                <p className="mt-1 text-sm text-red-200/70">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {isLoading && hasSearchQuery && artists.length === 0 && !error && (
+            <div className="flex min-h-64 flex-col items-center justify-center">
+              <LoaderCircle
+                className="animate-spin text-violet-400"
+                size={34}
+              />
+
+              <p className="mt-4 text-sm text-white/50">
+                Searching MusicBrainz...
+              </p>
+            </div>
+          )}
+
+          {!isLoading &&
+            !error &&
+            hasSearchQuery &&
+            artists.length === 0 && (
+              <div className="flex min-h-64 flex-col items-center justify-center rounded-3xl border border-white/10 bg-white/[0.02] px-6 text-center">
+                <UserRound className="text-white/30" size={38} />
+
+                <h2 className="mt-4 text-lg font-semibold text-white">
+                  No artists found
+                </h2>
+
+                <p className="mt-2 text-sm text-white/50">
+                  Try a different spelling or a more general artist name.
                 </p>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
-            <p className="text-white/50">
-              No artists matched your search.
-            </p>
-          </div>
-        )}
-      </section>
+              </div>
+            )}
 
-      {/* Albums */}
-      <section>
-        <h2 className="mb-5 text-2xl font-semibold text-white">
-          Recommended Albums
-        </h2>
+          {!error && artists.length > 0 && (
+            <>
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-white">
+                  Search results
+                </h2>
 
-        {filteredAlbums.length > 0 ? (
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-            {filteredAlbums.map((album) => {
-              const albumArtist = artists.find(
-                (artist) => artist.id === album.artistId,
-              )
+                <span className="text-sm text-white/40">
+                  {artists.length} artists
+                </span>
+              </div>
 
-              return (
-                <article
-                  key={album.id}
-                  className="group overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:-translate-y-1 hover:bg-white/10"
-                >
-                  <div className="relative">
-                    {/* Clicking the cover opens the Album page */}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate(`/album/${album.id}`)
-                      }
-                      className="block w-full"
-                      aria-label={`Open ${album.title}`}
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {artists.map((artist) => {
+                  const location =
+                    artist.area?.name ??
+                    artist.country ??
+                    'Location unavailable'
+
+                  return (
+                    <article
+                      key={artist.id}
+                      className="group rounded-2xl border border-white/10 bg-white/[0.04] p-5 transition hover:-translate-y-1 hover:border-violet-400/30 hover:bg-white/[0.07]"
                     >
-                      <img
-                        src={album.coverUrl}
-                        alt={album.title}
-                        className="aspect-square w-full object-cover"
-                      />
-                    </button>
+                      <div className="flex items-start gap-4">
+                        <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-lg font-bold text-white shadow-lg shadow-violet-950/30">
+                          {getArtistInitials(artist.name)}
+                        </div>
 
-                    {/* Clicking this button plays the album immediately */}
-                    <button
-                      type="button"
-                      onClick={() => handlePlayAlbum(album.id)}
-                      aria-label={`Play ${album.title}`}
-                      className="absolute bottom-4 right-4 flex h-14 w-14 items-center justify-center rounded-full bg-white text-black opacity-0 shadow-xl transition hover:scale-105 group-hover:opacity-100"
-                    >
-                      <Play className="h-6 w-6 fill-current" />
-                    </button>
-                  </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="truncate text-lg font-semibold text-white">
+                              {artist.name}
+                            </h3>
 
-                  {/* Clicking album information opens the Album page */}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigate(`/album/${album.id}`)
-                    }
-                    className="block w-full p-4 text-left"
-                  >
-                    <h3 className="truncate font-semibold text-white">
-                      {album.title}
-                    </h3>
+                            {typeof artist.score === 'number' && (
+                              <span className="shrink-0 rounded-full bg-violet-500/10 px-2 py-1 text-xs font-medium text-violet-300">
+                                {artist.score}%
+                              </span>
+                            )}
+                          </div>
 
-                    <p className="mt-1 truncate text-sm text-white/50">
-                      {albumArtist?.name}
-                    </p>
+                          <p className="mt-1 text-sm text-white/50">
+                            {artist.type ?? 'Artist'}
+                          </p>
+                        </div>
+                      </div>
 
-                    <p className="mt-3 text-xs text-white/30">
-                      {album.releaseYear} ·{' '}
-                      {album.trackIds.length} tracks
-                    </p>
-                  </button>
-                </article>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
-            <p className="text-white/50">
-              No albums matched your search.
-            </p>
-          </div>
-        )}
+                      <div className="mt-5 flex items-center gap-2 text-sm text-white/50">
+                        <MapPin size={16} />
+                        <span className="truncate">{location}</span>
+                      </div>
+
+                      {artist.disambiguation && (
+                        <p className="mt-3 line-clamp-2 text-sm leading-5 text-white/40">
+                          {artist.disambiguation}
+                        </p>
+                      )}
+                    </article>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
       </section>
-    </div>
+    </main>
   )
 }
