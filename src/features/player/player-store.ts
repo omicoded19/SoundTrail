@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
 import type { Track } from '@/types/track'
 
 export type RepeatMode = 'off' | 'all' | 'one'
@@ -32,146 +34,285 @@ interface PlayerState {
   tickProgress: () => void
 }
 
-function pickRandomIndex(queue: Track[], currentIndex: number): number {
-  if (queue.length <= 1) return currentIndex
-  let next = currentIndex
-  while (next === currentIndex) {
-    next = Math.floor(Math.random() * queue.length)
+function pickRandomIndex(
+  queue: Track[],
+  currentIndex: number,
+): number {
+  if (queue.length <= 1) {
+    return currentIndex
   }
-  return next
+
+  let nextIndex = currentIndex
+
+  while (nextIndex === currentIndex) {
+    nextIndex = Math.floor(Math.random() * queue.length)
+  }
+
+  return nextIndex
 }
 
-export const usePlayerStore = create<PlayerState>((set, get) => ({
-  currentTrack: null,
-  queue: [],
-  queueIndex: -1,
-  isPlaying: false,
-  isShuffle: false,
-  repeatMode: 'off',
-  progress: 0,
-  volume: 0.75,
-  likedTrackIds: [],
-  isQueueOpen: false,
-
-  playTrack: (track, queue) => {
-    const activeQueue = queue ?? get().queue
-    const queueIndex = activeQueue.findIndex((t) => t.id === track.id)
-    set({
-      currentTrack: track,
-      queue: activeQueue.length > 0 ? activeQueue : [track],
-      queueIndex: queueIndex >= 0 ? queueIndex : 0,
+export const usePlayerStore = create<PlayerState>()(
+  persist(
+    (set, get) => ({
+      currentTrack: null,
+      queue: [],
+      queueIndex: -1,
+      isPlaying: false,
+      isShuffle: false,
+      repeatMode: 'off',
       progress: 0,
-      isPlaying: true,
-    })
-  },
+      volume: 0.75,
+      likedTrackIds: [],
+      isQueueOpen: false,
 
-  togglePlay: () => {
-    const { isPlaying, currentTrack } = get()
-    if (!currentTrack) return
-    set({ isPlaying: !isPlaying })
-  },
+      playTrack: (track, queue) => {
+        const activeQueue = queue ?? get().queue
 
-  pause: () => set({ isPlaying: false }),
+        const queueIndex = activeQueue.findIndex(
+          (queueTrack) => queueTrack.id === track.id,
+        )
 
-  resume: () => {
-    if (get().currentTrack) set({ isPlaying: true })
-  },
+        set({
+          currentTrack: track,
+          queue:
+            activeQueue.length > 0
+              ? activeQueue
+              : [track],
+          queueIndex: queueIndex >= 0 ? queueIndex : 0,
+          progress: 0,
+          isPlaying: true,
+        })
+      },
 
-  next: () => {
-    const { queue, queueIndex, isShuffle, repeatMode, currentTrack } = get()
-    if (queue.length === 0 || !currentTrack) return
+      togglePlay: () => {
+        const { isPlaying, currentTrack } = get()
 
-    if (repeatMode === 'one') {
-      set({ progress: 0, isPlaying: true })
-      return
-    }
+        if (!currentTrack) {
+          return
+        }
 
-    let nextIndex: number
-    if (isShuffle) {
-      nextIndex = pickRandomIndex(queue, queueIndex)
-    } else if (queueIndex < queue.length - 1) {
-      nextIndex = queueIndex + 1
-    } else if (repeatMode === 'all') {
-      nextIndex = 0
-    } else {
-      set({ isPlaying: false })
-      return
-    }
+        set({
+          isPlaying: !isPlaying,
+        })
+      },
 
-    set({
-      queueIndex: nextIndex,
-      currentTrack: queue[nextIndex],
-      progress: 0,
-      isPlaying: true,
-    })
-  },
+      pause: () => {
+        set({
+          isPlaying: false,
+        })
+      },
 
-  previous: () => {
-    const { queue, queueIndex, progress, currentTrack } = get()
-    if (queue.length === 0 || !currentTrack) return
+      resume: () => {
+        if (get().currentTrack) {
+          set({
+            isPlaying: true,
+          })
+        }
+      },
 
-    if (progress > 3) {
-      set({ progress: 0 })
-      return
-    }
+      next: () => {
+        const {
+          queue,
+          queueIndex,
+          isShuffle,
+          repeatMode,
+          currentTrack,
+        } = get()
 
-    const prevIndex = queueIndex > 0 ? queueIndex - 1 : queue.length - 1
-    set({
-      queueIndex: prevIndex,
-      currentTrack: queue[prevIndex],
-      progress: 0,
-      isPlaying: true,
-    })
-  },
+        if (queue.length === 0 || !currentTrack) {
+          return
+        }
 
-  seek: (time) => {
-    const { currentTrack } = get()
-    if (!currentTrack) return
-    const clamped = Math.max(0, Math.min(time, currentTrack.durationSec))
-    set({ progress: clamped })
-  },
+        if (repeatMode === 'one') {
+          set({
+            progress: 0,
+            isPlaying: true,
+          })
 
-  setVolume: (volume) => {
-    set({ volume: Math.max(0, Math.min(1, volume)) })
-  },
+          return
+        }
 
-  toggleShuffle: () => set((state) => ({ isShuffle: !state.isShuffle })),
+        let nextIndex: number
 
-  cycleRepeat: () => {
-    const order: RepeatMode[] = ['off', 'all', 'one']
-    const current = get().repeatMode
-    const next = order[(order.indexOf(current) + 1) % order.length]
-    set({ repeatMode: next })
-  },
+        if (isShuffle) {
+          nextIndex = pickRandomIndex(queue, queueIndex)
+        } else if (queueIndex < queue.length - 1) {
+          nextIndex = queueIndex + 1
+        } else if (repeatMode === 'all') {
+          nextIndex = 0
+        } else {
+          set({
+            isPlaying: false,
+          })
 
-  toggleLike: (trackId) => {
-    const id = trackId ?? get().currentTrack?.id
-    if (!id) return
-    set((state) => ({
-      likedTrackIds: state.likedTrackIds.includes(id)
-        ? state.likedTrackIds.filter((likedId) => likedId !== id)
-        : [...state.likedTrackIds, id],
-    }))
-  },
+          return
+        }
 
-  isLiked: (trackId) => get().likedTrackIds.includes(trackId),
+        set({
+          queueIndex: nextIndex,
+          currentTrack: queue[nextIndex],
+          progress: 0,
+          isPlaying: true,
+        })
+      },
 
-  toggleQueue: () => set((state) => ({ isQueueOpen: !state.isQueueOpen })),
+      previous: () => {
+        const {
+          queue,
+          queueIndex,
+          progress,
+          currentTrack,
+        } = get()
 
-  closeQueue: () => set({ isQueueOpen: false }),
+        if (queue.length === 0 || !currentTrack) {
+          return
+        }
 
-  tickProgress: () => {
-    const { isPlaying, currentTrack, progress, repeatMode, next } = get()
-    if (!isPlaying || !currentTrack) return
+        if (progress > 3) {
+          set({
+            progress: 0,
+          })
 
-    if (progress >= currentTrack.durationSec) {
-      if (repeatMode === 'one') {
-        set({ progress: 0 })
-      } else {
-        next()
-      }
-    } else {
-      set({ progress: progress + 1 })
-    }
-  },
-}))
+          return
+        }
+
+        const previousIndex =
+          queueIndex > 0
+            ? queueIndex - 1
+            : queue.length - 1
+
+        set({
+          queueIndex: previousIndex,
+          currentTrack: queue[previousIndex],
+          progress: 0,
+          isPlaying: true,
+        })
+      },
+
+      seek: (time) => {
+        const { currentTrack } = get()
+
+        if (!currentTrack) {
+          return
+        }
+
+        const clampedTime = Math.max(
+          0,
+          Math.min(time, currentTrack.durationSec),
+        )
+
+        set({
+          progress: clampedTime,
+        })
+      },
+
+      setVolume: (volume) => {
+        const clampedVolume = Math.max(
+          0,
+          Math.min(1, volume),
+        )
+
+        set({
+          volume: clampedVolume,
+        })
+      },
+
+      toggleShuffle: () => {
+        set((state) => ({
+          isShuffle: !state.isShuffle,
+        }))
+      },
+
+      cycleRepeat: () => {
+        const repeatModes: RepeatMode[] = [
+          'off',
+          'all',
+          'one',
+        ]
+
+        const currentMode = get().repeatMode
+
+        const nextMode =
+          repeatModes[
+            (repeatModes.indexOf(currentMode) + 1) %
+              repeatModes.length
+          ]
+
+        set({
+          repeatMode: nextMode,
+        })
+      },
+
+      toggleLike: (trackId) => {
+        const id =
+          trackId ?? get().currentTrack?.id
+
+        if (!id) {
+          return
+        }
+
+        set((state) => ({
+          likedTrackIds: state.likedTrackIds.includes(id)
+            ? state.likedTrackIds.filter(
+                (likedId) => likedId !== id,
+              )
+            : [...state.likedTrackIds, id],
+        }))
+      },
+
+      isLiked: (trackId) => {
+        return get().likedTrackIds.includes(trackId)
+      },
+
+      toggleQueue: () => {
+        set((state) => ({
+          isQueueOpen: !state.isQueueOpen,
+        }))
+      },
+
+      closeQueue: () => {
+        set({
+          isQueueOpen: false,
+        })
+      },
+
+      tickProgress: () => {
+        const {
+          isPlaying,
+          currentTrack,
+          progress,
+          repeatMode,
+          next,
+        } = get()
+
+        if (!isPlaying || !currentTrack) {
+          return
+        }
+
+        if (progress >= currentTrack.durationSec) {
+          if (repeatMode === 'one') {
+            set({
+              progress: 0,
+            })
+          } else {
+            next()
+          }
+        } else {
+          set({
+            progress: progress + 1,
+          })
+        }
+      },
+    }),
+
+    {
+      name: 'soundtrail-player',
+
+      // Only these values remain after refreshing the browser.
+      partialize: (state) => ({
+        likedTrackIds: state.likedTrackIds,
+        volume: state.volume,
+      }),
+    },
+  ),
+)
