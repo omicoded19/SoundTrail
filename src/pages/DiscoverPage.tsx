@@ -130,7 +130,7 @@ export function DiscoverPage() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search artists or albums..."
-          className="w-full rounded-xl border border-white/10 bg-white/5 py-4 pl-14 pr-5 text-white outline-none transition placeholder:text-white/30 focus:border-pink-500"
+          className="w-full rounded-xl border border-white/10 bg-white/5 py-4 pl-14 pr-5 text-white outline-none transition placeholder:text-white/30 focus:border-[var(--accent)]"
         />
       </div>
 
@@ -220,7 +220,7 @@ export function DiscoverPage() {
                     </button>
                   </div>
 
-                  {/* Clicking album information also opens the Album page */}
+                  {/* Clicking album information opens the Album page */}
                   <button
                     type="button"
                     onClick={() =>

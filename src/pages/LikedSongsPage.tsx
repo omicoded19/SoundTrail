@@ -33,7 +33,7 @@ export function LikedSongsPage() {
       <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <div className="flex items-center gap-3">
-            <Heart className="h-8 w-8 fill-pink-400 text-pink-400" />
+            <Heart className="h-8 w-8 fill-[var(--accent)] text-[var(--accent)]" />
 
             <h1 className="text-5xl font-bold text-white">
               Liked Songs
@@ -81,7 +81,9 @@ export function LikedSongsPage() {
 
               <button
                 type="button"
-                onClick={() => playTrack(track, likedTracks)}
+                onClick={() =>
+                  playTrack(track, likedTracks)
+                }
                 className="shrink-0"
                 aria-label={`Play ${track.title}`}
               >
@@ -94,7 +96,9 @@ export function LikedSongsPage() {
 
               <button
                 type="button"
-                onClick={() => playTrack(track, likedTracks)}
+                onClick={() =>
+                  playTrack(track, likedTracks)
+                }
                 className="min-w-0 flex-1 text-left"
               >
                 <p className="truncate font-medium text-white">

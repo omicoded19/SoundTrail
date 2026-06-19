@@ -24,7 +24,9 @@ function formatDuration(durationSec: number) {
 }
 
 export function InsightsPage() {
-  const playTrack = usePlayerStore((state) => state.playTrack)
+  const playTrack = usePlayerStore(
+    (state) => state.playTrack,
+  )
 
   /*
     Add the duration of every track together.
@@ -49,7 +51,9 @@ export function InsightsPage() {
 
     const percentage =
       tracks.length > 0
-        ? Math.round((artistTrackCount / tracks.length) * 100)
+        ? Math.round(
+            (artistTrackCount / tracks.length) * 100,
+          )
         : 0
 
     return {
@@ -67,7 +71,10 @@ export function InsightsPage() {
   */
   const longestTracks = [...tracks]
     .sort((firstTrack, secondTrack) => {
-      return secondTrack.durationSec - firstTrack.durationSec
+      return (
+        secondTrack.durationSec -
+        firstTrack.durationSec
+      )
     })
     .slice(0, 5)
 
@@ -76,7 +83,10 @@ export function InsightsPage() {
   */
   const newestAlbums = [...albums]
     .sort((firstAlbum, secondAlbum) => {
-      return secondAlbum.releaseYear - firstAlbum.releaseYear
+      return (
+        secondAlbum.releaseYear -
+        firstAlbum.releaseYear
+      )
     })
     .slice(0, 4)
 
@@ -107,7 +117,7 @@ export function InsightsPage() {
     <div className="min-h-screen space-y-10 p-8 pb-32">
       <header>
         <div className="flex items-center gap-3">
-          <Disc3 className="h-8 w-8 text-pink-400" />
+          <Disc3 className="h-8 w-8 text-[var(--accent)]" />
 
           <h1 className="text-5xl font-bold text-white">
             Insights
@@ -135,7 +145,7 @@ export function InsightsPage() {
                   {stat.label}
                 </p>
 
-                <Icon className="h-5 w-5 text-pink-300" />
+                <Icon className="h-5 w-5 text-[var(--accent)]" />
               </div>
 
               <p className="mt-5 text-3xl font-bold text-white">
@@ -155,7 +165,8 @@ export function InsightsPage() {
             </h2>
 
             <p className="mt-1 text-sm text-white/50">
-              How the current catalogue is divided between artists.
+              How the current catalogue is divided between
+              artists.
             </p>
           </div>
 
@@ -191,7 +202,8 @@ export function InsightsPage() {
                     className="h-full rounded-full"
                     style={{
                       width: `${artist.percentage}%`,
-                      backgroundColor: artist.accentColor,
+                      backgroundColor:
+                        artist.accentColor,
                     }}
                   />
                 </div>
@@ -217,7 +229,9 @@ export function InsightsPage() {
               <button
                 key={track.id}
                 type="button"
-                onClick={() => playTrack(track, tracks)}
+                onClick={() =>
+                  playTrack(track, tracks)
+                }
                 className="flex w-full items-center gap-4 rounded-xl px-2 py-4 text-left transition hover:bg-white/5"
               >
                 <span className="w-5 text-sm text-white/30">
@@ -266,7 +280,8 @@ export function InsightsPage() {
         <div className="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
           {newestAlbums.map((album) => {
             const albumArtist = artists.find(
-              (artist) => artist.id === album.artistId,
+              (artist) =>
+                artist.id === album.artistId,
             )
 
             return (

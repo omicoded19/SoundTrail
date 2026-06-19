@@ -92,7 +92,7 @@ export function AIDJPage() {
     <div className="min-h-screen space-y-10 p-8 pb-32">
       <header>
         <div className="flex items-center gap-3">
-          <Sparkles className="h-8 w-8 text-pink-400" />
+          <Sparkles className="h-8 w-8 text-[var(--accent)]" />
 
           <h1 className="text-5xl font-bold text-white">
             AI DJ
@@ -145,7 +145,7 @@ export function AIDJPage() {
       <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-pink-300">
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-[var(--accent)]">
               Generated for you
             </p>
 

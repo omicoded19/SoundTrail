@@ -215,7 +215,7 @@ export function PlaylistsPage() {
     <div className="min-h-screen space-y-10 p-8 pb-32">
       <header>
         <div className="flex items-center gap-3">
-          <ListMusic className="h-8 w-8 text-pink-400" />
+          <ListMusic className="h-8 w-8 text-[var(--accent)]" />
 
           <h1 className="text-5xl font-bold text-white">
             Playlists
@@ -250,7 +250,7 @@ export function PlaylistsPage() {
                 setPlaylistName(event.target.value)
               }
               placeholder="Night Drive"
-              className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-pink-500"
+              className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-[var(--accent)]"
             />
 
             <button
@@ -354,7 +354,7 @@ export function PlaylistsPage() {
                   onChange={(event) =>
                     setSelectedTrackId(event.target.value)
                   }
-                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#171717] px-4 py-3 text-white outline-none focus:border-pink-500"
+                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#171717] px-4 py-3 text-white outline-none focus:border-[var(--accent)]"
                 >
                   <option value="">Select a track</option>
 

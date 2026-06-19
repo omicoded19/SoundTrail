@@ -1,7 +1,7 @@
 import {
   useEffect,
   useState,
-  type SubmitEvent,
+  type ComponentProps,
 } from 'react'
 
 import {
@@ -20,6 +20,12 @@ type JournalEntry = {
   note: string
   createdAt: string
 }
+
+type FormSubmitHandler = NonNullable<
+  ComponentProps<'form'>['onSubmit']
+>
+
+const STORAGE_KEY = 'soundtrail-journal'
 
 export function JournalPage() {
   /*
@@ -40,16 +46,18 @@ export function JournalPage() {
     Load saved entries from localStorage when the page opens.
   */
   const [entries, setEntries] = useState<JournalEntry[]>(() => {
-    const savedEntries = localStorage.getItem(
-      'soundtrail-journal',
-    )
+    const savedEntries = localStorage.getItem(STORAGE_KEY)
 
     if (!savedEntries) {
       return []
     }
 
     try {
-      return JSON.parse(savedEntries)
+      const parsedEntries = JSON.parse(savedEntries)
+
+      return Array.isArray(parsedEntries)
+        ? parsedEntries
+        : []
     } catch {
       return []
     }
@@ -60,7 +68,7 @@ export function JournalPage() {
   */
   useEffect(() => {
     localStorage.setItem(
-      'soundtrail-journal',
+      STORAGE_KEY,
       JSON.stringify(entries),
     )
   }, [entries])
@@ -78,9 +86,7 @@ export function JournalPage() {
     setArtist(currentTrack.artistName)
   }
 
-  const handleSubmit = (
-    event: SubmitEvent<HTMLFormElement>,
-  ) => {
+  const handleSubmit: FormSubmitHandler = (event) => {
     event.preventDefault()
 
     if (
@@ -121,7 +127,7 @@ export function JournalPage() {
     <div className="min-h-screen space-y-10 p-8 pb-32">
       <header>
         <div className="flex items-center gap-3">
-          <BookOpen className="h-8 w-8 text-pink-400" />
+          <BookOpen className="h-8 w-8 text-[var(--accent)]" />
 
           <h1 className="text-5xl font-bold text-white">
             Journal
@@ -210,7 +216,7 @@ export function JournalPage() {
                   setSong(event.target.value)
                 }
                 placeholder="Paper Moon"
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-pink-500"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-[var(--accent)]"
               />
             </div>
 
@@ -230,7 +236,7 @@ export function JournalPage() {
                   setArtist(event.target.value)
                 }
                 placeholder="Luna Vale"
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-pink-500"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-[var(--accent)]"
               />
             </div>
 
@@ -250,7 +256,7 @@ export function JournalPage() {
                 }
                 placeholder="This song reminds me of..."
                 rows={5}
-                className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-pink-500"
+                className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-[var(--accent)]"
               />
             </div>
 
@@ -295,7 +301,7 @@ export function JournalPage() {
                         {entry.song}
                       </h3>
 
-                      <p className="text-sm text-pink-300">
+                      <p className="text-sm text-[var(--accent)]">
                         {entry.artist}
                       </p>
                     </div>
