@@ -7,6 +7,7 @@ import { JournalPage } from '@/pages/JournalPage'
 import { AIDJPage } from '@/pages/AIDJPage'
 import { InsightsPage } from '@/pages/InsightsPage'
 import { LikedSongsPage } from '@/pages/LikedSongsPage'
+import { PlaylistsPage } from '@/pages/PlaylistsPage'
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -36,6 +37,11 @@ export const router = createBrowserRouter([
         path: 'liked',
         element: <LikedSongsPage />,
       },
+      {
+        path: 'playlists',
+        element: <PlaylistsPage />,
+      }
+
     ],
   },
 ])

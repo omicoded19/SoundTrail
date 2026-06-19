@@ -40,5 +40,20 @@ export function getRelatedArtists(artistId: string): Artist[] {
 export function getTrackById(id: string): Track | undefined {
   return tracks.find((track) => track.id === id)
 }
+export function getAlbumById(id: string): Album | undefined {
+  return albums.find((album) => album.id === id)
+}
+
+export function getTracksByAlbum(albumId: string): Track[] {
+  const album = getAlbumById(albumId)
+
+  if (!album) {
+    return []
+  }
+
+  return album.trackIds
+    .map((trackId) => getTrackById(trackId))
+    .filter((track): track is Track => track !== undefined)
+}
 
 export { artists, tracks, albums, DEFAULT_ARTIST_ID }

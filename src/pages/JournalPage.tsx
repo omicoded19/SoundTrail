@@ -1,7 +1,7 @@
 import {
   useEffect,
   useState,
-  type FormEvent,
+  type SubmitEvent,
 } from 'react'
 
 import {
@@ -79,7 +79,7 @@ export function JournalPage() {
   }
 
   const handleSubmit = (
-    event: FormEvent<HTMLFormElement>,
+    event: SubmitEvent<HTMLFormElement>,
   ) => {
     event.preventDefault()
 

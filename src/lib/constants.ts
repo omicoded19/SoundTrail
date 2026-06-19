@@ -24,4 +24,5 @@ export const NAV_ITEMS: {
   { to: '/ai-dj', label: 'AI DJ', mobileLabel: 'AI DJ' },
   { to: '/insights', label: 'Insights', mobileLabel: 'Insights' },
   { to: '/liked', label: 'Liked Songs', mobileLabel: 'Liked' },
+  { to: '/playlists', label: 'Playlists', mobileLabel: 'Playlists' },
 ]
