@@ -78,11 +78,7 @@ type MusicBrainzArtistSearchResponse = {
 }
 
 /*
-  This is the simpler track format returned by our
-  own Express API.
-
-  The React frontend does not need to depend directly
-  on MusicBrainz field names.
+  Clean track shape returned by the SoundTrail backend.
 */
 export type MusicTrackSearchResult = {
   id: string
@@ -98,8 +94,7 @@ export type MusicTrackSearchResult = {
 }
 
 /*
-  These types describe the cleaner artist format
-  returned by the SoundTrail backend.
+  Clean artist shapes returned by the SoundTrail backend.
 */
 export type MusicArtistArea = {
   id: string
@@ -128,11 +123,13 @@ export type MusicArtistSearchResult = {
   score: number | null
   area: MusicArtistArea | null
   beginArea: MusicArtistArea | null
+
   lifeSpan: {
     begin: string | null
     end: string | null
     ended: boolean
   } | null
+
   genres: MusicArtistGenre[]
   tags: MusicArtistTag[]
   musicBrainzUrl: string
@@ -142,11 +139,10 @@ const MUSICBRAINZ_BASE_URL =
   'https://musicbrainz.org/ws/2'
 
 /*
-  MusicBrainz asks clients not to exceed approximately
-  one request per second.
+  MusicBrainz asks applications to limit how frequently
+  they send requests.
 
-  This queue ensures that track searches, artist searches
-  and artist-detail requests are sent one after another.
+  This queue sends MusicBrainz requests one at a time.
 */
 let requestQueue: Promise<void> = Promise.resolve()
 let lastRequestTime = 0
@@ -174,7 +170,7 @@ function scheduleMusicBrainzRequest<T>(
   })
 
   /*
-    Keep the queue working even if one request fails.
+    Keep the queue moving even when one request fails.
   */
   requestQueue = scheduledRequest.then(
     () => undefined,
@@ -184,9 +180,6 @@ function scheduleMusicBrainzRequest<T>(
   return scheduledRequest
 }
 
-/*
-  Every MusicBrainz request uses the same headers.
-*/
 function getMusicBrainzHeaders() {
   const contact = process.env.MUSICBRAINZ_CONTACT
 
@@ -222,6 +215,13 @@ function getOptionalScore(
   return getScore(score)
 }
 
+/*
+  Returns the complete artist-credit text.
+
+  This preserves collaborations such as:
+
+  Artist A feat. Artist B
+*/
 function getArtistName(
   recording: MusicBrainzRecording,
 ): string {
@@ -244,6 +244,21 @@ function getArtistName(
     .trim()
 }
 
+/*
+  Prefer an official release when MusicBrainz provides
+  multiple releases for the same recording.
+*/
+function getPreferredRelease(
+  recording: MusicBrainzRecording,
+): MusicBrainzRelease | undefined {
+  return (
+    recording.releases?.find(
+      (release) => release.status === 'Official',
+    ) ??
+    recording.releases?.[0]
+  )
+}
+
 function mapArtistArea(
   area: MusicBrainzArea | undefined,
 ): MusicArtistArea | null {
@@ -258,10 +273,6 @@ function mapArtistArea(
   }
 }
 
-/*
-  Converts MusicBrainz artist data into the simpler
-  format returned by the SoundTrail backend.
-*/
 function mapArtist(
   artist: MusicBrainzArtist,
 ): MusicArtistSearchResult {
@@ -307,6 +318,7 @@ function mapArtist(
     score: getOptionalScore(artist.score),
     area: mapArtistArea(artist.area),
     beginArea: mapArtistArea(artist['begin-area']),
+
     lifeSpan: lifeSpan
       ? {
           begin: lifeSpan.begin ?? null,
@@ -314,17 +326,214 @@ function mapArtist(
           ended: lifeSpan.ended ?? false,
         }
       : null,
+
     genres,
     tags,
+
     musicBrainzUrl:
       `https://musicbrainz.org/artist/${artist.id}`,
   }
 }
 
 /*
-  Searches MusicBrainz recordings.
+  Converts one MusicBrainz recording into the simpler
+  SoundTrail track format.
+*/
+function mapRecording(
+  recording: MusicBrainzRecording,
+): MusicTrackSearchResult {
+  const release = getPreferredRelease(recording)
 
-  This keeps your existing track-search functionality.
+  const firstArtist =
+    recording['artist-credit']?.[0]?.artist
+
+  return {
+    id: recording.id,
+    title: recording.title,
+    artistName: getArtistName(recording),
+    artistId: firstArtist?.id ?? null,
+    albumTitle:
+      release?.title ?? 'Unknown release',
+    releaseId: release?.id ?? null,
+    durationSec: Math.round(
+      (recording.length ?? 0) / 1000,
+    ),
+    firstReleaseDate:
+      recording['first-release-date'] ?? null,
+    score: getScore(recording.score),
+    musicBrainzUrl:
+      `https://musicbrainz.org/recording/${recording.id}`,
+  }
+}
+
+/*
+  Creates a consistent key for duplicate detection.
+
+  Examples:
+
+  "Tum Hi Ho"
+  "tum hi ho"
+  "  Tum   Hi   Ho  "
+
+  all become the same key.
+*/
+function normalizeRecordingTitle(
+  title: string,
+): string {
+  return title
+    .normalize('NFKC')
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/\s+/g, ' ')
+}
+
+/*
+  Gives better-quality recording entries a higher score.
+
+  When duplicate titles exist, SoundTrail keeps the
+  recording containing more useful metadata.
+*/
+function getRecordingQuality(
+  recording: MusicBrainzRecording,
+): number {
+  let quality = 0
+
+  const preferredRelease =
+    getPreferredRelease(recording)
+
+  if (
+    preferredRelease?.status === 'Official'
+  ) {
+    quality += 4
+  }
+
+  if (
+    recording.length !== undefined &&
+    recording.length > 0
+  ) {
+    quality += 2
+  }
+
+  if (recording['first-release-date']) {
+    quality += 2
+  }
+
+  if (preferredRelease?.title) {
+    quality += 1
+  }
+
+  if (
+    recording['artist-credit'] &&
+    recording['artist-credit'].length > 0
+  ) {
+    quality += 1
+  }
+
+  return quality
+}
+
+/*
+  Chooses which recording should be kept when two
+  recordings have the same normalized title.
+*/
+function shouldReplaceRecording(
+  existingRecording: MusicBrainzRecording,
+  candidateRecording: MusicBrainzRecording,
+): boolean {
+  const existingQuality =
+    getRecordingQuality(existingRecording)
+
+  const candidateQuality =
+    getRecordingQuality(candidateRecording)
+
+  if (candidateQuality !== existingQuality) {
+    return candidateQuality > existingQuality
+  }
+
+  const existingScore =
+    getScore(existingRecording.score)
+
+  const candidateScore =
+    getScore(candidateRecording.score)
+
+  if (candidateScore !== existingScore) {
+    return candidateScore > existingScore
+  }
+
+  const existingDate =
+    existingRecording['first-release-date']
+
+  const candidateDate =
+    candidateRecording['first-release-date']
+
+  /*
+    Prefer an entry with a release date.
+  */
+  if (!existingDate && candidateDate) {
+    return true
+  }
+
+  if (existingDate && !candidateDate) {
+    return false
+  }
+
+  /*
+    When both have dates, prefer the earlier recording.
+  */
+  if (existingDate && candidateDate) {
+    return candidateDate < existingDate
+  }
+
+  return false
+}
+
+/*
+  Removes duplicate recording titles while preserving
+  the best available MusicBrainz entry.
+*/
+function removeDuplicateRecordings(
+  recordings: MusicBrainzRecording[],
+): MusicBrainzRecording[] {
+  const uniqueRecordings =
+    new Map<string, MusicBrainzRecording>()
+
+  for (const recording of recordings) {
+    const normalizedTitle =
+      normalizeRecordingTitle(recording.title)
+
+    const existingRecording =
+      uniqueRecordings.get(normalizedTitle)
+
+    if (!existingRecording) {
+      uniqueRecordings.set(
+        normalizedTitle,
+        recording,
+      )
+
+      continue
+    }
+
+    if (
+      shouldReplaceRecording(
+        existingRecording,
+        recording,
+      )
+    ) {
+      uniqueRecordings.set(
+        normalizedTitle,
+        recording,
+      )
+    }
+  }
+
+  return [...uniqueRecordings.values()]
+}
+
+/*
+  General track search.
+
+  dismax is used here because the user enters ordinary
+  track names instead of advanced search syntax.
 */
 export async function searchRecordings(
   query: string,
@@ -359,48 +568,132 @@ export async function searchRecordings(
     const data =
       (await response.json()) as MusicBrainzRecordingResponse
 
-    return data.recordings.map((recording) => {
-      /*
-        Prefer an official release.
+    return data.recordings.map(mapRecording)
+  })
+}
 
-        If no official release exists, use the first
-        available release.
-      */
-      const release =
-        recording.releases?.find(
-          (item) => item.status === 'Official',
-        ) ??
-        recording.releases?.[0]
+/*
+  Loads recordings credited to one exact artist.
 
-      const firstArtist =
-        recording['artist-credit']?.[0]?.artist
+  This function does not use dismax because arid is
+  advanced MusicBrainz search syntax.
+*/
+export async function getArtistRecordings(
+  artistId: string,
+): Promise<MusicTrackSearchResult[]> {
+  const trimmedArtistId = artistId.trim()
 
-      return {
-        id: recording.id,
-        title: recording.title,
-        artistName: getArtistName(recording),
-        artistId: firstArtist?.id ?? null,
-        albumTitle:
-          release?.title ?? 'Unknown release',
-        releaseId: release?.id ?? null,
-        durationSec: Math.round(
-          (recording.length ?? 0) / 1000,
-        ),
-        firstReleaseDate:
-          recording['first-release-date'] ?? null,
-        score: getScore(recording.score),
-        musicBrainzUrl:
-          `https://musicbrainz.org/recording/${recording.id}`,
-      }
-    })
+  if (!trimmedArtistId) {
+    throw new Error('Artist ID is required.')
+  }
+
+  const parameters = new URLSearchParams({
+    query: `arid:${trimmedArtistId}`,
+    fmt: 'json',
+    limit: '50',
+  })
+
+  return scheduleMusicBrainzRequest(async () => {
+    const response = await fetch(
+      `${MUSICBRAINZ_BASE_URL}/recording?${parameters.toString()}`,
+      {
+        headers: getMusicBrainzHeaders(),
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(
+        `MusicBrainz artist recordings request failed with status ${response.status}`,
+      )
+    }
+
+    const data =
+      (await response.json()) as MusicBrainzRecordingResponse
+
+    /*
+      Keep only recordings where the selected artist
+      appears inside the artist-credit information.
+    */
+    const verifiedRecordings =
+      data.recordings.filter((recording) => {
+        return recording['artist-credit']?.some(
+          (credit) => {
+            return (
+              credit.artist?.id ===
+              trimmedArtistId
+            )
+          },
+        )
+      })
+
+    const uniqueRecordings =
+      removeDuplicateRecordings(
+        verifiedRecordings,
+      )
+
+    return uniqueRecordings
+      .map(mapRecording)
+      .sort((firstTrack, secondTrack) => {
+        /*
+          Show newer recordings first when both tracks
+          have a known release date.
+        */
+        if (
+          firstTrack.firstReleaseDate &&
+          secondTrack.firstReleaseDate
+        ) {
+          const dateComparison =
+            secondTrack.firstReleaseDate.localeCompare(
+              firstTrack.firstReleaseDate,
+            )
+
+          if (dateComparison !== 0) {
+            return dateComparison
+          }
+        }
+
+        /*
+          Tracks with known dates appear before tracks
+          whose dates are unavailable.
+        */
+        if (
+          firstTrack.firstReleaseDate &&
+          !secondTrack.firstReleaseDate
+        ) {
+          return -1
+        }
+
+        if (
+          !firstTrack.firstReleaseDate &&
+          secondTrack.firstReleaseDate
+        ) {
+          return 1
+        }
+
+        /*
+          Use MusicBrainz search score as the next
+          ordering rule.
+        */
+        if (
+          firstTrack.score !==
+          secondTrack.score
+        ) {
+          return (
+            secondTrack.score -
+            firstTrack.score
+          )
+        }
+
+        return firstTrack.title.localeCompare(
+          secondTrack.title,
+        )
+      })
+      .slice(0, 20)
   })
 }
 
 /*
   Searches for artists by name.
-
-  Example:
-  searchArtists('Arijit Singh')
 */
 export async function searchArtists(
   query: string,
@@ -440,11 +733,7 @@ export async function searchArtists(
 }
 
 /*
-  Loads full information for one artist by using
-  their MusicBrainz artist ID.
-
-  The inc parameter asks MusicBrainz to include genres
-  and tags in the response.
+  Loads complete information for one artist.
 */
 export async function getArtistDetails(
   artistId: string,

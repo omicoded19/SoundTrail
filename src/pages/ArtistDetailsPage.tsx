@@ -3,6 +3,8 @@ import {
   AlertCircle,
   ArrowLeft,
   CalendarDays,
+  Clock3,
+  Disc3,
   ExternalLink,
   LoaderCircle,
   MapPin,
@@ -10,50 +12,12 @@ import {
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 
-interface SoundTrailArtistArea {
-  id: string
-  name: string
-  type: string | null
-}
-
-interface SoundTrailArtistGenre {
-  id: string | null
-  name: string
-  count: number
-}
-
-interface SoundTrailArtistTag {
-  name: string
-  count: number
-}
-
-interface SoundTrailArtist {
-  id: string
-  name: string
-  sortName: string
-  type: string | null
-  country: string | null
-  disambiguation: string | null
-  score: number | null
-  area: SoundTrailArtistArea | null
-  beginArea: SoundTrailArtistArea | null
-
-  lifeSpan: {
-    begin: string | null
-    end: string | null
-    ended: boolean
-  } | null
-
-  genres: SoundTrailArtistGenre[]
-  tags: SoundTrailArtistTag[]
-  musicBrainzUrl: string
-}
-
-interface ArtistDetailsResponse {
-  success: boolean
-  artist?: SoundTrailArtist
-  message?: string
-}
+import {
+  getArtistDetails,
+  getArtistTracks,
+  type SoundTrailArtist,
+  type SoundTrailTrack,
+} from '@/services/api'
 
 function getArtistInitials(name: string) {
   return name
@@ -64,12 +28,20 @@ function getArtistInitials(name: string) {
     .toUpperCase()
 }
 
-export function ArtistDetailsPage() {
-  /*
-    Reads the artist ID from a URL such as:
+function formatDuration(durationSec: number) {
+  if (durationSec <= 0) {
+    return 'Unknown'
+  }
 
-    /artist/ed3f4831-e3e0-4dc0-9381-f5649e9df221
-  */
+  const minutes = Math.floor(durationSec / 60)
+  const seconds = durationSec % 60
+
+  return `${minutes}:${seconds
+    .toString()
+    .padStart(2, '0')}`
+}
+
+export function ArtistDetailsPage() {
   const { artistId } = useParams<{
     artistId: string
   }>()
@@ -77,66 +49,53 @@ export function ArtistDetailsPage() {
   const [artist, setArtist] =
     useState<SoundTrailArtist | null>(null)
 
-  const [isLoading, setIsLoading] =
+  const [tracks, setTracks] =
+    useState<SoundTrailTrack[]>([])
+
+  const [isArtistLoading, setIsArtistLoading] =
     useState(true)
 
-  const [error, setError] =
+  const [isTracksLoading, setIsTracksLoading] =
+    useState(true)
+
+  const [artistError, setArtistError] =
+    useState<string | null>(null)
+
+  const [tracksError, setTracksError] =
     useState<string | null>(null)
 
   useEffect(() => {
     if (!artistId) {
-      setError('No artist ID was provided.')
-      setIsLoading(false)
+      setArtistError('No artist ID was provided.')
+      setTracksError('No artist ID was provided.')
+      setIsArtistLoading(false)
+      setIsTracksLoading(false)
       return
     }
 
+    /*
+      After this check, selectedArtistId is guaranteed
+      to be a string inside both async functions.
+    */
+    const selectedArtistId = artistId
+
     const controller = new AbortController()
 
-    async function loadArtistDetails() {
+    setArtist(null)
+    setTracks([])
+
+    async function loadArtist() {
       try {
-        setIsLoading(true)
-        setError(null)
+        setIsArtistLoading(true)
+        setArtistError(null)
 
-        /*
-          ArtistDetailsPage contacts the Express backend.
-
-          The backend then loads the artist information
-          from MusicBrainz.
-        */
-        const response = await fetch(
-          `http://localhost:4000/api/artists/${encodeURIComponent(
-            artistId,
-          )}`,
-          {
-            signal: controller.signal,
-            headers: {
-              Accept: 'application/json',
-            },
-          },
+        const artistResult = await getArtistDetails(
+          selectedArtistId,
+          controller.signal,
         )
 
-        const data =
-          (await response.json()) as ArtistDetailsResponse
-
-        if (!response.ok) {
-          throw new Error(
-            data.message ??
-              `Request failed with status ${response.status}`,
-          )
-        }
-
-        if (!data.artist) {
-          throw new Error(
-            'The backend returned no artist information.',
-          )
-        }
-
-        setArtist(data.artist)
+        setArtist(artistResult)
       } catch (requestError) {
-        /*
-          AbortError is expected when the user leaves
-          the page before the request finishes.
-        */
         if (
           requestError instanceof DOMException &&
           requestError.name === 'AbortError'
@@ -151,26 +110,65 @@ export function ArtistDetailsPage() {
 
         setArtist(null)
 
-        setError(
+        setArtistError(
           requestError instanceof Error
             ? requestError.message
             : 'We could not load this artist.',
         )
       } finally {
         if (!controller.signal.aborted) {
-          setIsLoading(false)
+          setIsArtistLoading(false)
         }
       }
     }
 
-    loadArtistDetails()
+    async function loadTracks() {
+      try {
+        setIsTracksLoading(true)
+        setTracksError(null)
+
+        const trackResults = await getArtistTracks(
+          selectedArtistId,
+          controller.signal,
+        )
+
+        setTracks(trackResults)
+      } catch (requestError) {
+        if (
+          requestError instanceof DOMException &&
+          requestError.name === 'AbortError'
+        ) {
+          return
+        }
+
+        console.error(
+          'Artist tracks request failed:',
+          requestError,
+        )
+
+        setTracks([])
+
+        setTracksError(
+          requestError instanceof Error
+            ? requestError.message
+            : 'We could not load this artist’s recordings.',
+        )
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsTracksLoading(false)
+        }
+      }
+    }
+
+    loadArtist()
+    loadTracks()
 
     return () => {
       controller.abort()
     }
   }, [artistId])
 
-  if (isLoading) {
+  if (isArtistLoading && !artist) {
     return (
       <main className="flex min-h-[70vh] items-center justify-center px-6">
         <div className="text-center">
@@ -214,7 +212,7 @@ export function ArtistDetailsPage() {
               </h1>
 
               <p className="mt-1 text-sm text-red-200/70">
-                {error ??
+                {artistError ??
                   'No artist information was found.'}
               </p>
             </div>
@@ -251,6 +249,8 @@ export function ArtistDetailsPage() {
       return secondTag.count - firstTag.count
     })
     .slice(0, 8)
+
+  const displayedTracks = tracks.slice(0, 12)
 
   return (
     <main className="min-h-screen px-6 py-10 lg:px-12">
@@ -366,7 +366,132 @@ export function ArtistDetailsPage() {
           </div>
         </div>
 
-        <p className="mt-5 text-xs text-white/25">
+        <section className="mt-10">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-[0.2em] text-violet-400">
+                Recordings
+              </p>
+
+              <h2 className="mt-2 text-2xl font-bold text-white">
+                Songs by {artist.name}
+              </h2>
+            </div>
+
+            {!isTracksLoading && !tracksError && (
+              <span className="text-sm text-white/40">
+                {displayedTracks.length} recordings
+              </span>
+            )}
+          </div>
+
+          {isTracksLoading && (
+            <div className="mt-6 flex min-h-48 flex-col items-center justify-center rounded-3xl border border-white/10 bg-white/[0.03]">
+              <LoaderCircle
+                className="animate-spin text-violet-400"
+                size={32}
+              />
+
+              <p className="mt-4 text-sm text-white/50">
+                Loading recordings...
+              </p>
+            </div>
+          )}
+
+          {!isTracksLoading && tracksError && (
+            <div
+              role="alert"
+              className="mt-6 flex items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-5 text-amber-200"
+            >
+              <AlertCircle
+                className="mt-0.5 shrink-0"
+                size={20}
+              />
+
+              <div>
+                <h3 className="font-semibold">
+                  Recordings could not be loaded
+                </h3>
+
+                <p className="mt-1 text-sm text-amber-200/70">
+                  {tracksError}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!isTracksLoading &&
+            !tracksError &&
+            displayedTracks.length === 0 && (
+              <div className="mt-6 flex min-h-48 flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.02] px-6 text-center">
+                <Disc3
+                  className="text-white/30"
+                  size={38}
+                />
+
+                <h3 className="mt-4 text-lg font-semibold text-white">
+                  No recordings found
+                </h3>
+
+                <p className="mt-2 text-sm text-white/50">
+                  MusicBrainz does not currently have
+                  recordings connected to this artist.
+                </p>
+              </div>
+            )}
+
+          {!isTracksLoading &&
+            !tracksError &&
+            displayedTracks.length > 0 && (
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                {displayedTracks.map((track, index) => (
+                  <article
+                    key={track.id}
+                    className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-violet-400/30 hover:bg-white/[0.07]"
+                  >
+                    <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-sm font-semibold text-violet-300">
+                      {index + 1}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate font-semibold text-white">
+                        {track.title}
+                      </h3>
+
+                      <p className="mt-1 truncate text-sm text-white/45">
+                        {track.albumTitle}
+                      </p>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-white/35">
+                        <span className="flex items-center gap-1">
+                          <Clock3 size={13} />
+                          {formatDuration(track.durationSec)}
+                        </span>
+
+                        {track.firstReleaseDate && (
+                          <span>
+                            {track.firstReleaseDate}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <a
+                      href={track.musicBrainzUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Open ${track.title} on MusicBrainz`}
+                      className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 text-white/45 transition hover:border-violet-400/30 hover:bg-violet-500/10 hover:text-violet-300"
+                    >
+                      <ExternalLink size={17} />
+                    </a>
+                  </article>
+                ))}
+              </div>
+            )}
+        </section>
+
+        <p className="mt-8 text-xs text-white/25">
           MusicBrainz ID: {artist.id}
         </p>
       </section>

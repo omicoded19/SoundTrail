@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 
 import {
   getArtistDetails,
+  getArtistRecordings,
   searchArtists,
   searchRecordings,
 } from './services/musicbrainz.js'
@@ -38,10 +39,10 @@ app.get('/api/health', (_request, response) => {
 })
 
 /*
-  Searches for recordings or tracks.
+  Searches for tracks using an ordinary text query.
 
   Example:
-  GET /api/search/tracks?q=Arijit Singh
+  GET /api/search/tracks?q=Tum Hi Ho
 */
 app.get('/api/search/tracks', async (request, response) => {
   const query =
@@ -126,13 +127,66 @@ app.get('/api/search/artists', async (request, response) => {
 })
 
 /*
+  Returns recordings credited to one exact artist.
+
+  Example:
+  GET /api/artists/ARTIST_ID/tracks
+*/
+app.get(
+  '/api/artists/:artistId/tracks',
+  async (request, response) => {
+    const artistId =
+      typeof request.params.artistId === 'string'
+        ? request.params.artistId.trim()
+        : ''
+
+    if (!artistId) {
+      response.status(400).json({
+        success: false,
+        message: 'Artist ID is required.',
+      })
+
+      return
+    }
+
+    try {
+      const tracks =
+        await getArtistRecordings(artistId)
+
+      response.json({
+        success: true,
+        artistId,
+        count: tracks.length,
+        tracks,
+      })
+    } catch (error) {
+      console.error(
+        'Artist recordings request failed:',
+        error,
+      )
+
+      response.status(500).json({
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to load artist recordings.',
+      })
+    }
+  },
+)
+
+/*
   Loads one artist using their MusicBrainz ID.
 
   Example:
-  GET /api/artists/ed3f4831-e3e0-4dc0-9381-f5649e9df221
+  GET /api/artists/ARTIST_ID
 */
 app.get('/api/artists/:artistId', async (request, response) => {
-  const artistId = request.params.artistId.trim()
+  const artistId =
+    typeof request.params.artistId === 'string'
+      ? request.params.artistId.trim()
+      : ''
 
   if (!artistId) {
     response.status(400).json({

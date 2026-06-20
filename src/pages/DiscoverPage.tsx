@@ -8,63 +8,10 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-/*
-  This type matches the cleaned artist object
-  returned by our Express backend.
-*/
-interface SoundTrailArtist {
-  id: string
-  name: string
-  sortName: string
-  type: string | null
-  country: string | null
-  disambiguation: string | null
-  score: number | null
-
-  area: {
-    id: string
-    name: string
-    type: string | null
-  } | null
-
-  beginArea: {
-    id: string
-    name: string
-    type: string | null
-  } | null
-
-  lifeSpan: {
-    begin: string | null
-    end: string | null
-    ended: boolean
-  } | null
-
-  genres: {
-    id: string | null
-    name: string
-    count: number
-  }[]
-
-  tags: {
-    name: string
-    count: number
-  }[]
-
-  musicBrainzUrl: string
-}
-
-/*
-  This type matches the response returned by:
-
-  GET /api/search/artists
-*/
-interface ArtistSearchResponse {
-  success: boolean
-  query?: string
-  count?: number
-  artists?: SoundTrailArtist[]
-  message?: string
-}
+import {
+  searchArtists,
+  type SoundTrailArtist,
+} from '@/services/api'
 
 function getArtistInitials(name: string) {
   return name
@@ -92,8 +39,8 @@ export function DiscoverPage() {
     const trimmedQuery = searchQuery.trim()
 
     /*
-      Do not search when the query contains
-      fewer than two characters.
+      Avoid sending requests for an empty query
+      or a one-character query.
     */
     if (trimmedQuery.length < 2) {
       setArtists([])
@@ -108,44 +55,26 @@ export function DiscoverPage() {
     setError(null)
 
     /*
-      Wait for the user to stop typing before
-      sending the search request.
+      Wait until the user has stopped typing
+      before searching.
     */
     const timeoutId = window.setTimeout(async () => {
       try {
-        const parameters = new URLSearchParams({
-          q: trimmedQuery,
-        })
-
         /*
-          The frontend contacts our Express backend.
+          searchArtists comes from src/services/api.ts.
 
-          The backend then contacts MusicBrainz.
+          DiscoverPage no longer needs to know the
+          backend URL or response structure.
         */
-        const response = await fetch(
-          `http://localhost:4000/api/search/artists?${parameters.toString()}`,
-          {
-            signal: controller.signal,
-            headers: {
-              Accept: 'application/json',
-            },
-          },
+        const results = await searchArtists(
+          trimmedQuery,
+          controller.signal,
         )
 
-        const data =
-          (await response.json()) as ArtistSearchResponse
-
-        if (!response.ok) {
-          throw new Error(
-            data.message ??
-              `Request failed with status ${response.status}`,
-          )
-        }
-
-        setArtists(data.artists ?? [])
+        setArtists(results)
       } catch (requestError) {
         /*
-          AbortError is normal when the query changes
+          AbortError is expected when the query changes
           before an older request finishes.
         */
         if (
@@ -168,6 +97,10 @@ export function DiscoverPage() {
             : 'We could not load artists.',
         )
       } finally {
+        /*
+          Avoid updating state after the request
+          has been cancelled.
+        */
         if (!controller.signal.aborted) {
           setIsLoading(false)
         }
@@ -175,8 +108,8 @@ export function DiscoverPage() {
     }, 1000)
 
     /*
-      Cancel the timer and old request when
-      the search query changes.
+      Cancel both the debounce timer and the previous
+      request whenever the query changes.
     */
     return () => {
       window.clearTimeout(timeoutId)
