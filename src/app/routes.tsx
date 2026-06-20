@@ -3,12 +3,14 @@ import { AppShell } from '@/components/layout/AppShell'
 
 import { HomePage } from '@/pages/HomePage'
 import { DiscoverPage } from '@/pages/DiscoverPage'
+import { ArtistDetailsPage } from '@/pages/ArtistDetailsPage'
 import { JournalPage } from '@/pages/JournalPage'
 import { AIDJPage } from '@/pages/AIDJPage'
 import { InsightsPage } from '@/pages/InsightsPage'
 import { LikedSongsPage } from '@/pages/LikedSongsPage'
 import { PlaylistsPage } from '@/pages/PlaylistsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -21,6 +23,10 @@ export const router = createBrowserRouter([
       {
         path: 'discover',
         element: <DiscoverPage />,
+      },
+      {
+        path: 'artist/:artistId',
+        element: <ArtistDetailsPage />,
       },
       {
         path: 'journal',
@@ -46,7 +52,6 @@ export const router = createBrowserRouter([
         path: 'settings',
         element: <SettingsPage />,
       },
-
     ],
   },
 ])
