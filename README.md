@@ -316,7 +316,7 @@ The shortcut is disabled while typing inside inputs, text areas and other intera
 
 ## Author
 
-Developed by **Om Deep Masram**.
+Developed by **Omdeep Masram**.
 
 GitHub: `omicoded19`
 
