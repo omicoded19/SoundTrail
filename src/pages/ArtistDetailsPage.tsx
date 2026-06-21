@@ -41,8 +41,7 @@ export function ArtistDetailsPage() {
   const [artist, setArtist] =
     useState<SoundTrailArtist | null>(null)
 
-  const [tracks, setTracks] =
-    useState<Track[]>([])
+  const [tracks, setTracks] = useState<Track[]>([])
 
   const [isArtistLoading, setIsArtistLoading] =
     useState(true)
@@ -78,7 +77,6 @@ export function ArtistDetailsPage() {
       setTracksError('No artist ID was provided.')
       setIsArtistLoading(false)
       setIsTracksLoading(false)
-
       return
     }
 
@@ -94,28 +92,19 @@ export function ArtistDetailsPage() {
 
     async function loadPage() {
       try {
-        /*
-          MusicBrainz provides the artist profile.
-        */
-        const artistResult =
-          await getArtistDetails(
-            selectedArtistId,
-            controller.signal,
-          )
+        const artistResult = await getArtistDetails(
+          selectedArtistId,
+          controller.signal,
+        )
 
         setArtist(artistResult)
         setIsArtistLoading(false)
 
         try {
-          /*
-            iTunes provides artwork and playable
-            audio previews.
-          */
-          const trackResults =
-            await searchTracks(
-              artistResult.name,
-              controller.signal,
-            )
+          const trackResults = await searchTracks(
+            artistResult.name,
+            controller.signal,
+          )
 
           setTracks(trackResults)
         } catch (requestError) {
@@ -180,20 +169,13 @@ export function ArtistDetailsPage() {
       return
     }
 
-    /*
-      Clicking the active track pauses or resumes it.
-    */
     if (currentTrack?.id === track.id) {
       togglePlay()
       return
     }
 
-    /*
-      Give the player every playable artist track
-      so next and previous continue working.
-    */
-    const playableQueue = tracks.filter(
-      (item) => Boolean(item.previewUrl),
+    const playableQueue = tracks.filter((item) =>
+      Boolean(item.previewUrl),
     )
 
     playTrack(track, playableQueue)
@@ -297,8 +279,17 @@ export function ArtistDetailsPage() {
             <div className="absolute inset-0 bg-gradient-to-br from-violet-500/20 via-fuchsia-500/5 to-transparent" />
 
             <div className="relative flex flex-col gap-7 md:flex-row md:items-center">
-              <div className="flex size-28 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-3xl font-bold text-white shadow-2xl shadow-violet-950/40 md:size-36 md:text-4xl">
-                {getArtistInitials(artist.name)}
+              <div className="flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-[var(--accent-soft)] text-3xl font-bold text-[var(--accent)] shadow-[0_0_40px_var(--accent-glow)] md:size-36 md:text-4xl">
+                {artist.imageUrl ? (
+                  <img
+                    src={artist.imageUrl}
+                    alt={`${artist.name} portrait`}
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  getArtistInitials(artist.name)
+                )}
               </div>
 
               <div className="min-w-0">
@@ -463,8 +454,8 @@ export function ArtistDetailsPage() {
                 </h3>
 
                 <p className="mt-2 text-sm text-white/50">
-                  Try searching for this artist directly
-                  on the Discover page.
+                  Try searching for this artist directly on the
+                  Discover page.
                 </p>
               </div>
             )}
@@ -540,9 +531,7 @@ export function ArtistDetailsPage() {
 
                         <p className="mt-2 flex items-center gap-1 text-xs text-white/35">
                           <Clock3 size={13} />
-                          {formatDuration(
-                            track.durationSec,
-                          )}
+                          {formatDuration(track.durationSec)}
                         </p>
                       </div>
 

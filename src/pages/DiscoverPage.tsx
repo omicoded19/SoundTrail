@@ -1,8 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import {
   AlertCircle,
@@ -26,10 +22,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import {
-  Link,
-  useSearchParams,
-} from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { usePlayerStore } from '@/features/player/player-store'
 import { formatDuration } from '@/lib/format'
@@ -134,14 +127,140 @@ function getUniqueTracks(
 
   for (const track of tracks) {
     if (!uniqueTracks.has(track.id)) {
-      uniqueTracks.set(track.id, track)
+      uniqueTracks.set(
+        track.id,
+        track,
+      )
     }
   }
 
   return [...uniqueTracks.values()]
 }
 
-function isAbortError(error: unknown) {
+function normalizeSearchText(
+  value: string,
+) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function sortArtistsForQuery(
+  artists: SoundTrailArtist[],
+  query: string,
+) {
+  const normalizedQuery =
+    normalizeSearchText(query)
+
+  return [...artists].sort(
+    (
+      firstArtist,
+      secondArtist,
+    ) => {
+      const firstName =
+        normalizeSearchText(
+          firstArtist.name,
+        )
+
+      const secondName =
+        normalizeSearchText(
+          secondArtist.name,
+        )
+
+      const getPriority = (
+        name: string,
+      ) => {
+        if (
+          name === normalizedQuery
+        ) {
+          return 0
+        }
+
+        if (
+          name.startsWith(
+            normalizedQuery,
+          )
+        ) {
+          return 1
+        }
+
+        if (
+          name.includes(
+            normalizedQuery,
+          )
+        ) {
+          return 2
+        }
+
+        return 3
+      }
+
+      const priorityDifference =
+        getPriority(firstName) -
+        getPriority(secondName)
+
+      if (
+        priorityDifference !== 0
+      ) {
+        return priorityDifference
+      }
+
+      return (
+        (secondArtist.score ?? 0) -
+        (firstArtist.score ?? 0)
+      )
+    },
+  )
+}
+
+function trackBelongsToArtist(
+  trackArtistName: string,
+  artistName: string,
+) {
+  const normalizedTrackArtist =
+    normalizeSearchText(
+      trackArtistName,
+    )
+
+  const normalizedArtist =
+    normalizeSearchText(artistName)
+
+  if (
+    !normalizedTrackArtist ||
+    !normalizedArtist
+  ) {
+    return false
+  }
+
+  if (
+    normalizedTrackArtist ===
+    normalizedArtist
+  ) {
+    return true
+  }
+
+  return (
+    normalizedTrackArtist.startsWith(
+      `${normalizedArtist} `,
+    ) ||
+    normalizedTrackArtist.endsWith(
+      ` ${normalizedArtist}`,
+    ) ||
+    normalizedTrackArtist.includes(
+      ` ${normalizedArtist} `,
+    )
+  )
+}
+
+function isAbortError(
+  error: unknown,
+) {
   return (
     error instanceof DOMException &&
     error.name === 'AbortError'
@@ -157,67 +276,87 @@ export function DiscoverPage() {
   const urlQuery =
     searchParams.get('q') ?? ''
 
-  const currentTrack = usePlayerStore(
-    (state) => state.currentTrack,
-  )
+  const currentTrack =
+    usePlayerStore(
+      (state) =>
+        state.currentTrack,
+    )
 
   const queue = usePlayerStore(
     (state) => state.queue,
   )
 
-  const isPlaying = usePlayerStore(
-    (state) => state.isPlaying,
-  )
+  const isPlaying =
+    usePlayerStore(
+      (state) =>
+        state.isPlaying,
+    )
 
-  const playTrack = usePlayerStore(
-    (state) => state.playTrack,
-  )
+  const playTrack =
+    usePlayerStore(
+      (state) =>
+        state.playTrack,
+    )
 
-  const togglePlay = usePlayerStore(
-    (state) => state.togglePlay,
-  )
+  const togglePlay =
+    usePlayerStore(
+      (state) =>
+        state.togglePlay,
+    )
 
-  const toggleLike = usePlayerStore(
-    (state) => state.toggleLike,
-  )
+  const toggleLike =
+    usePlayerStore(
+      (state) =>
+        state.toggleLike,
+    )
 
-  const isLiked = usePlayerStore(
-    (state) => state.isLiked,
-  )
+  const isLiked =
+    usePlayerStore(
+      (state) => state.isLiked,
+    )
 
-  const [searchQuery, setSearchQuery] =
-    useState(urlQuery)
+  const [
+    searchQuery,
+    setSearchQuery,
+  ] = useState(urlQuery)
 
   const [tracks, setTracks] =
     useState<Track[]>([])
 
-  const [artists, setArtists] = useState<
-    SoundTrailArtist[]
-  >([])
+  const [artists, setArtists] =
+    useState<
+      SoundTrailArtist[]
+    >([])
 
-  const [quickPicks, setQuickPicks] =
-    useState<Track[]>([])
+  const [
+    quickPicks,
+    setQuickPicks,
+  ] = useState<Track[]>([])
 
-  const [isSearching, setIsSearching] =
-    useState(false)
+  const [
+    isSearching,
+    setIsSearching,
+  ] = useState(false)
 
   const [
     isQuickPicksLoading,
     setIsQuickPicksLoading,
   ] = useState(true)
 
-  const [searchError, setSearchError] =
-    useState<string | null>(null)
+  const [
+    searchError,
+    setSearchError,
+  ] = useState<
+    string | null
+  >(null)
 
-  const [quickPicksError, setQuickPicksError] =
-    useState<string | null>(null)
+  const [
+    quickPicksError,
+    setQuickPicksError,
+  ] = useState<
+    string | null
+  >(null)
 
-  /*
-    Synchronise Discover with the URL.
-
-    Pressing browser Back after selecting a category
-    removes the query and returns to Start Browsing.
-  */
   useEffect(() => {
     setSearchQuery(urlQuery)
 
@@ -228,57 +367,79 @@ export function DiscoverPage() {
   }, [urlQuery])
 
   useEffect(() => {
-    const controller = new AbortController()
+    const controller =
+      new AbortController()
 
     async function loadQuickPicks() {
-      setIsQuickPicksLoading(true)
+      setIsQuickPicksLoading(
+        true,
+      )
+
       setQuickPicksError(null)
 
       try {
         const results =
-          await Promise.allSettled([
-            searchTracks(
-              'Bollywood hits',
-              controller.signal,
-            ),
-            searchTracks(
-              'Indian pop',
-              controller.signal,
-            ),
-            searchTracks(
-              'chill music',
-              controller.signal,
-            ),
-          ])
+          await Promise.allSettled(
+            [
+              searchTracks(
+                'Bollywood hits',
+                controller.signal,
+              ),
+              searchTracks(
+                'Indian pop',
+                controller.signal,
+              ),
+              searchTracks(
+                'chill music',
+                controller.signal,
+              ),
+            ],
+          )
 
-        if (controller.signal.aborted) {
+        if (
+          controller.signal.aborted
+        ) {
           return
         }
 
-        const loadedTracks = results.flatMap(
-          (result) => {
-            return result.status === 'fulfilled'
-              ? result.value
-              : []
-          },
-        )
+        const loadedTracks =
+          results.flatMap(
+            (result) => {
+              return result.status ===
+                'fulfilled'
+                ? result.value
+                : []
+            },
+          )
 
         const uniqueResults =
           getUniqueTracks(
-            loadedTracks.filter((track) =>
-              Boolean(track.previewUrl),
+            loadedTracks.filter(
+              (track) =>
+                Boolean(
+                  track.previewUrl,
+                ),
             ),
           ).slice(0, 12)
 
-        setQuickPicks(uniqueResults)
+        setQuickPicks(
+          uniqueResults,
+        )
 
-        if (uniqueResults.length === 0) {
+        if (
+          uniqueResults.length ===
+          0
+        ) {
           setQuickPicksError(
             'No playable recommendations are available right now.',
           )
         }
       } catch (requestError) {
-        if (isAbortError(requestError)) {
+        if (
+          isAbortError(
+            requestError,
+          )
+        ) {
           return
         }
 
@@ -290,13 +451,19 @@ export function DiscoverPage() {
         setQuickPicks([])
 
         setQuickPicksError(
-          requestError instanceof Error
+          requestError instanceof
+            Error
             ? requestError.message
             : 'Could not load recommendations.',
         )
       } finally {
-        if (!controller.signal.aborted) {
-          setIsQuickPicksLoading(false)
+        if (
+          !controller.signal
+            .aborted
+        ) {
+          setIsQuickPicksLoading(
+            false,
+          )
         }
       }
     }
@@ -312,7 +479,9 @@ export function DiscoverPage() {
     const trimmedQuery =
       searchQuery.trim()
 
-    if (trimmedQuery.length < 2) {
+    if (
+      trimmedQuery.length < 2
+    ) {
       setTracks([])
       setArtists([])
       setSearchError(null)
@@ -327,86 +496,126 @@ export function DiscoverPage() {
     setIsSearching(true)
     setSearchError(null)
 
-    const timeoutId = window.setTimeout(
-      async () => {
-        try {
-          const [
-            trackResults,
-            artistResults,
-          ] = await Promise.all([
-            searchTracks(
-              trimmedQuery,
-              controller.signal,
-            ),
-            searchArtists(
-              trimmedQuery,
-              controller.signal,
-            ),
-          ])
+    const timeoutId =
+      window.setTimeout(
+        async () => {
+          try {
+            const artistResults =
+              await searchArtists(
+                trimmedQuery,
+                controller.signal,
+              )
 
-          setTracks(
-            trackResults.slice(0, 16),
-          )
+            const sortedArtists =
+              sortArtistsForQuery(
+                artistResults,
+                trimmedQuery,
+              )
 
-          setArtists(
-            artistResults.slice(0, 9),
-          )
-        } catch (requestError) {
-          if (isAbortError(requestError)) {
-            return
+            const primaryArtist =
+              sortedArtists[0] ??
+              null
+
+            const trackResults =
+              await searchTracks(
+                primaryArtist?.name ??
+                  trimmedQuery,
+                controller.signal,
+              )
+
+            const relevantTracks =
+              primaryArtist
+                ? trackResults.filter(
+                    (track) =>
+                      trackBelongsToArtist(
+                        track.artistName,
+                        primaryArtist.name,
+                      ),
+                  )
+                : trackResults
+
+            setArtists(
+              sortedArtists.slice(
+                0,
+                6,
+              ),
+            )
+
+            setTracks(
+              getUniqueTracks(
+                relevantTracks,
+              ).slice(0, 16),
+            )
+          } catch (
+            requestError
+          ) {
+            if (
+              isAbortError(
+                requestError,
+              )
+            ) {
+              return
+            }
+
+            console.error(
+              'Discover search failed:',
+              requestError,
+            )
+
+            setTracks([])
+            setArtists([])
+
+            setSearchError(
+              requestError instanceof
+                Error
+                ? requestError.message
+                : 'We could not complete your search.',
+            )
+          } finally {
+            if (
+              !controller.signal
+                .aborted
+            ) {
+              setIsSearching(
+                false,
+              )
+            }
           }
-
-          console.error(
-            'Discover search failed:',
-            requestError,
-          )
-
-          setTracks([])
-          setArtists([])
-
-          setSearchError(
-            requestError instanceof Error
-              ? requestError.message
-              : 'We could not complete your search.',
-          )
-        } finally {
-          if (!controller.signal.aborted) {
-            setIsSearching(false)
-          }
-        }
-      },
-      600,
-    )
+        },
+        600,
+      )
 
     return () => {
-      window.clearTimeout(timeoutId)
+      window.clearTimeout(
+        timeoutId,
+      )
+
       controller.abort()
     }
   }, [searchQuery])
 
-  const recentPlayerTracks = useMemo(() => {
-    return getUniqueTracks([
-      ...(currentTrack
-        ? [currentTrack]
-        : []),
-      ...queue,
-    ]).slice(0, 6)
-  }, [currentTrack, queue])
+  const recentPlayerTracks =
+    useMemo(() => {
+      return getUniqueTracks([
+        ...(currentTrack
+          ? [currentTrack]
+          : []),
+        ...queue,
+      ]).slice(0, 6)
+    }, [currentTrack, queue])
 
   const hasSearchQuery =
-    searchQuery.trim().length >= 2
+    searchQuery.trim().length >=
+    2
 
   function handleSearchChange(
     value: string,
   ) {
     setSearchQuery(value)
 
-    /*
-      When the query originally came from a category,
-      keep its URL entry updated without adding a new
-      browser-history entry for every key press.
-    */
-    if (searchParams.has('q')) {
+    if (
+      searchParams.has('q')
+    ) {
       if (value.trim()) {
         setSearchParams(
           {
@@ -430,10 +639,6 @@ export function DiscoverPage() {
   function handleCategoryClick(
     category: BrowseCategory,
   ) {
-    /*
-      replace defaults to false, so this creates a real
-      history entry. Browser Back returns to /discover.
-    */
     setSearchParams({
       q: category.query,
     })
@@ -468,17 +673,26 @@ export function DiscoverPage() {
       return
     }
 
-    if (currentTrack?.id === track.id) {
+    if (
+      currentTrack?.id ===
+      track.id
+    ) {
       togglePlay()
       return
     }
 
     const playableQueue =
-      sourceQueue.filter((queueTrack) =>
-        Boolean(queueTrack.previewUrl),
+      sourceQueue.filter(
+        (queueTrack) =>
+          Boolean(
+            queueTrack.previewUrl,
+          ),
       )
 
-    playTrack(track, playableQueue)
+    playTrack(
+      track,
+      playableQueue,
+    )
   }
 
   return (
@@ -494,8 +708,10 @@ export function DiscoverPage() {
           </h1>
 
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55 md:text-base">
-            Browse moods and genres, discover real
-            artists and play available catalogue
+            Browse moods and
+            genres, discover real
+            artists and play
+            available catalogue
             previews.
           </p>
         </header>
@@ -510,7 +726,9 @@ export function DiscoverPage() {
             <input
               type="search"
               value={searchQuery}
-              onChange={(event) => {
+              onChange={(
+                event,
+              ) => {
                 handleSearchChange(
                   event.target.value,
                 )
@@ -525,10 +743,13 @@ export function DiscoverPage() {
                 size={21}
               />
             ) : (
-              searchQuery.length > 0 && (
+              searchQuery.length >
+                0 && (
                 <button
                   type="button"
-                  onClick={handleBackToBrowse}
+                  onClick={
+                    handleBackToBrowse
+                  }
                   aria-label="Clear search"
                   className="absolute right-4 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-white/45 transition hover:bg-white/10 hover:text-white"
                 >
@@ -544,13 +765,23 @@ export function DiscoverPage() {
             query={searchQuery}
             tracks={tracks}
             artists={artists}
-            isLoading={isSearching}
+            isLoading={
+              isSearching
+            }
             error={searchError}
-            currentTrack={currentTrack}
-            isPlaying={isPlaying}
+            currentTrack={
+              currentTrack
+            }
+            isPlaying={
+              isPlaying
+            }
             isLiked={isLiked}
-            onPlayTrack={handlePlayTrack}
-            onToggleLike={toggleLike}
+            onPlayTrack={
+              handlePlayTrack
+            }
+            onToggleLike={
+              toggleLike
+            }
             onBackToBrowse={
               handleBackToBrowse
             }
@@ -572,7 +803,9 @@ export function DiscoverPage() {
 
                     return (
                       <button
-                        key={category.title}
+                        key={
+                          category.title
+                        }
                         type="button"
                         onClick={() => {
                           handleCategoryClick(
@@ -594,7 +827,9 @@ export function DiscoverPage() {
 
                         <div className="relative z-10 max-w-[70%]">
                           <h2 className="text-2xl font-bold text-white">
-                            {category.title}
+                            {
+                              category.title
+                            }
                           </h2>
 
                           <p className="mt-2 text-sm leading-5 text-white/70">
@@ -627,24 +862,35 @@ export function DiscoverPage() {
                 quickPicksError && (
                   <ErrorPanel
                     title="Quick picks unavailable"
-                    message={quickPicksError}
+                    message={
+                      quickPicksError
+                    }
                   />
                 )}
 
               {!isQuickPicksLoading &&
                 !quickPicksError &&
-                quickPicks.length > 0 && (
+                quickPicks.length >
+                  0 && (
                   <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
                     {quickPicks.map(
                       (track) => (
                         <TrackCard
-                          key={track.id}
-                          track={track}
-                          queue={quickPicks}
+                          key={
+                            track.id
+                          }
+                          track={
+                            track
+                          }
+                          queue={
+                            quickPicks
+                          }
                           currentTrack={
                             currentTrack
                           }
-                          isPlaying={isPlaying}
+                          isPlaying={
+                            isPlaying
+                          }
                           liked={isLiked(
                             track.id,
                           )}
@@ -661,7 +907,8 @@ export function DiscoverPage() {
                 )}
             </section>
 
-            {recentPlayerTracks.length > 0 && (
+            {recentPlayerTracks.length >
+              0 && (
               <section>
                 <SectionHeading
                   eyebrow="Continue listening"
@@ -671,17 +918,23 @@ export function DiscoverPage() {
 
                 <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] shadow-xl shadow-black/20 backdrop-blur-2xl">
                   {recentPlayerTracks.map(
-                    (track, index) => {
+                    (
+                      track,
+                      index,
+                    ) => {
                       const active =
                         currentTrack?.id ===
                         track.id
 
                       const activePlaying =
-                        active && isPlaying
+                        active &&
+                        isPlaying
 
                       return (
                         <article
-                          key={track.id}
+                          key={
+                            track.id
+                          }
                           className={`group flex items-center gap-4 border-b border-white/10 px-4 py-3 transition last:border-b-0 md:px-5 ${
                             active
                               ? 'bg-[var(--accent-soft)]'
@@ -689,7 +942,8 @@ export function DiscoverPage() {
                           }`}
                         >
                           <span className="w-5 shrink-0 text-center text-sm text-white/30">
-                            {index + 1}
+                            {index +
+                              1}
                           </span>
 
                           <button
@@ -719,7 +973,9 @@ export function DiscoverPage() {
                               <div className="flex h-full w-full items-center justify-center">
                                 <Music2
                                   className="text-white/30"
-                                  size={22}
+                                  size={
+                                    22
+                                  }
                                 />
                               </div>
                             )}
@@ -728,12 +984,16 @@ export function DiscoverPage() {
                               {activePlaying ? (
                                 <Pause
                                   className="fill-white text-white"
-                                  size={20}
+                                  size={
+                                    20
+                                  }
                                 />
                               ) : (
                                 <Play
                                   className="fill-white text-white"
-                                  size={20}
+                                  size={
+                                    20
+                                  }
                                 />
                               )}
                             </span>
@@ -756,17 +1016,23 @@ export function DiscoverPage() {
                                   : 'text-white'
                               }`}
                             >
-                              {track.title}
+                              {
+                                track.title
+                              }
                             </p>
 
                             <p className="mt-1 truncate text-sm text-white/50">
-                              {track.artistName}
+                              {
+                                track.artistName
+                              }
 
                               <span className="mx-2 text-white/20">
                                 •
                               </span>
 
-                              {track.albumTitle}
+                              {
+                                track.albumTitle
+                              }
                             </p>
                           </button>
 
@@ -779,15 +1045,21 @@ export function DiscoverPage() {
                           <button
                             type="button"
                             onClick={() => {
-                              toggleLike(track)
+                              toggleLike(
+                                track,
+                              )
                             }}
                             aria-label={
-                              isLiked(track.id)
+                              isLiked(
+                                track.id,
+                              )
                                 ? `Unlike ${track.title}`
                                 : `Like ${track.title}`
                             }
                             className={`flex size-10 shrink-0 items-center justify-center rounded-full border transition ${
-                              isLiked(track.id)
+                              isLiked(
+                                track.id,
+                              )
                                 ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
                                 : 'border-transparent text-white/40 hover:border-white/10 hover:bg-white/10 hover:text-white'
                             }`}
@@ -825,12 +1097,20 @@ interface SearchResultsProps {
   error: string | null
   currentTrack: Track | null
   isPlaying: boolean
-  isLiked: (trackId: string) => boolean
+
+  isLiked: (
+    trackId: string,
+  ) => boolean
+
   onPlayTrack: (
     track: Track,
     queue: Track[],
   ) => void
-  onToggleLike: (track: Track) => void
+
+  onToggleLike: (
+    track: Track,
+  ) => void
+
   onBackToBrowse: () => void
 }
 
@@ -847,9 +1127,15 @@ function SearchResults({
   onToggleLike,
   onBackToBrowse,
 }: SearchResultsProps) {
+  const primaryArtist =
+    artists[0] ?? null
+
+  const otherArtists =
+    artists.slice(1)
+
   const hasResults =
     tracks.length > 0 ||
-    artists.length > 0
+    primaryArtist !== null
 
   return (
     <div className="mt-8">
@@ -862,11 +1148,12 @@ function SearchResults({
         Back to browsing
       </button>
 
-      {isLoading && !hasResults && (
-        <LoadingPanel
-          message={`Searching for “${query.trim()}”...`}
-        />
-      )}
+      {isLoading &&
+        !hasResults && (
+          <LoadingPanel
+            message={`Searching for “${query.trim()}”...`}
+          />
+        )}
 
       {error && (
         <ErrorPanel
@@ -889,226 +1176,371 @@ function SearchResults({
             </h2>
 
             <p className="mt-2 max-w-md text-sm text-white/50">
-              Try another song title, artist
-              name or genre.
+              Try another song
+              title, artist name or
+              genre.
             </p>
           </div>
         )}
 
-      {!error && hasResults && (
-        <div className="space-y-14">
-          {tracks.length > 0 && (
+      {!error &&
+        hasResults && (
+          <div className="space-y-14">
             <section>
               <SectionHeading
-                eyebrow="Songs"
+                eyebrow="Top result"
                 title={`Results for “${query.trim()}”`}
-                description={`${tracks.length} playable catalogue results`}
+                description={
+                  primaryArtist
+                    ? `${primaryArtist.name} and matching playable songs`
+                    : `${tracks.length} playable catalogue results`
+                }
               />
 
-              <div className="mt-6 grid gap-3 lg:grid-cols-2">
-                {tracks.map((track) => {
-                  const active =
-                    currentTrack?.id ===
-                    track.id
-
-                  const activePlaying =
-                    active && isPlaying
-
-                  return (
-                    <article
-                      key={track.id}
-                      className={`group flex min-w-0 items-center gap-4 rounded-2xl border p-3 shadow-lg shadow-black/10 backdrop-blur-xl transition ${
-                        active
-                          ? 'border-[var(--accent)] bg-[var(--accent-soft)]'
-                          : 'border-white/10 bg-white/[0.045] hover:border-white/20 hover:bg-white/[0.075]'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onPlayTrack(
-                            track,
-                            tracks,
-                          )
-                        }}
-                        className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-white/10"
-                        aria-label={
-                          activePlaying
-                            ? `Pause ${track.title}`
-                            : `Play ${track.title}`
+              <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.7fr)]">
+                {primaryArtist && (
+                  <Link
+                    to={`/artist/${primaryArtist.id}`}
+                    className="group relative min-h-[360px] self-start overflow-hidden rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-2xl shadow-black/25 backdrop-blur-2xl transition hover:-translate-y-1 hover:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] lg:sticky lg:top-28"
+                  >
+                    {primaryArtist.bannerUrl && (
+                      <img
+                        src={
+                          primaryArtist.bannerUrl
                         }
-                      >
-                        {track.artworkUrl ? (
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover opacity-20 transition duration-500 group-hover:scale-105"
+                      />
+                    )}
+
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/45 to-black/95" />
+
+                    <div className="relative flex min-h-[312px] flex-col">
+                      <div className="flex size-32 items-center justify-center overflow-hidden rounded-full border-2 border-white/20 bg-[var(--accent-soft)] text-4xl font-bold text-[var(--accent)] shadow-[0_0_40px_var(--accent-glow)]">
+                        {primaryArtist.imageUrl ? (
                           <img
                             src={
-                              track.artworkUrl
+                              primaryArtist.imageUrl
                             }
-                            alt=""
+                            alt={`${primaryArtist.name} portrait`}
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center">
-                            <Music2
-                              className="text-white/30"
-                              size={24}
-                            />
-                          </div>
-                        )}
-
-                        <span className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition group-hover:opacity-100">
-                          {activePlaying ? (
-                            <Pause
-                              className="fill-white text-white"
-                              size={23}
-                            />
-                          ) : (
-                            <Play
-                              className="fill-white text-white"
-                              size={23}
-                            />
-                          )}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onPlayTrack(
-                            track,
-                            tracks,
+                          getArtistInitials(
+                            primaryArtist.name,
                           )
-                        }}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <h3
-                          className={`truncate font-semibold ${
-                            active
-                              ? 'text-[var(--accent)]'
-                              : 'text-white'
-                          }`}
-                        >
-                          {track.title}
-                        </h3>
-
-                        <p className="mt-1 truncate text-sm text-white/55">
-                          {track.artistName}
-                        </p>
-
-                        <p className="mt-1 truncate text-xs text-white/35">
-                          {track.albumTitle}
-                        </p>
-                      </button>
-
-                      <div className="flex shrink-0 flex-col items-end gap-2">
-                        <span className="text-xs tabular-nums text-white/35">
-                          {formatDuration(
-                            track.durationSec,
-                          )}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onToggleLike(track)
-                          }}
-                          aria-label={
-                            isLiked(track.id)
-                              ? `Unlike ${track.title}`
-                              : `Like ${track.title}`
-                          }
-                          className={`flex size-9 items-center justify-center rounded-full border transition ${
-                            isLiked(track.id)
-                              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
-                              : 'border-transparent text-white/40 hover:border-white/10 hover:bg-white/10 hover:text-white'
-                          }`}
-                        >
-                          <Heart
-                            size={16}
-                            className={
-                              isLiked(track.id)
-                                ? 'fill-current'
-                                : ''
-                            }
-                          />
-                        </button>
+                        )}
                       </div>
-                    </article>
-                  )
-                })}
+
+                      <p className="mt-6 text-xs font-medium uppercase tracking-[0.22em] text-[var(--accent)]">
+                        {primaryArtist.type ??
+                          'Artist'}
+                      </p>
+
+                      <h2 className="mt-2 text-3xl font-bold text-white">
+                        {
+                          primaryArtist.name
+                        }
+                      </h2>
+
+                      <div className="mt-4 flex items-center gap-2 text-sm text-white/55">
+                        <MapPin
+                          size={16}
+                        />
+
+                        <span className="truncate">
+                          {primaryArtist
+                            .area
+                            ?.name ??
+                            primaryArtist.country ??
+                            'Location unavailable'}
+                        </span>
+                      </div>
+
+                      {primaryArtist.disambiguation && (
+                        <p className="mt-4 line-clamp-2 text-sm leading-6 text-white/45">
+                          {
+                            primaryArtist.disambiguation
+                          }
+                        </p>
+                      )}
+
+                      <span className="mt-6 inline-flex w-fit items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_var(--accent-glow)]">
+                        Open artist
+                        profile
+
+                        <ArrowLeft
+                          className="rotate-180"
+                          size={16}
+                        />
+                      </span>
+                    </div>
+                  </Link>
+                )}
+
+                <div className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.035] p-4 shadow-xl shadow-black/20 backdrop-blur-2xl md:p-5 lg:max-h-[620px] lg:overflow-hidden">
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--accent)]">
+                        Songs
+                      </p>
+
+                      <h2 className="mt-2 text-2xl font-bold text-white">
+                        {primaryArtist
+                          ? `Songs by ${primaryArtist.name}`
+                          : 'Matching songs'}
+                      </h2>
+                    </div>
+
+                    <span className="shrink-0 text-sm text-white/35">
+                      {tracks.length}{' '}
+                      results
+                    </span>
+                  </div>
+
+                  {tracks.length >
+                  0 ? (
+                    <div className="mt-5 space-y-3 lg:max-h-[510px] lg:overflow-y-auto lg:pr-2">
+                      {tracks.map(
+                        (track) => {
+                          const active =
+                            currentTrack?.id ===
+                            track.id
+
+                          const activePlaying =
+                            active &&
+                            isPlaying
+
+                          return (
+                            <article
+                              key={
+                                track.id
+                              }
+                              className={`group flex min-w-0 items-center gap-3 rounded-2xl border p-3 transition ${
+                                active
+                                  ? 'border-[var(--accent)] bg-[var(--accent-soft)]'
+                                  : 'border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.065]'
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onPlayTrack(
+                                    track,
+                                    tracks,
+                                  )
+                                }}
+                                className="relative size-14 shrink-0 overflow-hidden rounded-xl bg-white/10"
+                                aria-label={
+                                  activePlaying
+                                    ? `Pause ${track.title}`
+                                    : `Play ${track.title}`
+                                }
+                              >
+                                {track.artworkUrl ? (
+                                  <img
+                                    src={
+                                      track.artworkUrl
+                                    }
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center">
+                                    <Music2
+                                      className="text-white/30"
+                                      size={
+                                        22
+                                      }
+                                    />
+                                  </div>
+                                )}
+
+                                <span className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition group-hover:opacity-100">
+                                  {activePlaying ? (
+                                    <Pause
+                                      className="fill-white text-white"
+                                      size={
+                                        20
+                                      }
+                                    />
+                                  ) : (
+                                    <Play
+                                      className="fill-white text-white"
+                                      size={
+                                        20
+                                      }
+                                    />
+                                  )}
+                                </span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onPlayTrack(
+                                    track,
+                                    tracks,
+                                  )
+                                }}
+                                className="min-w-0 flex-1 text-left"
+                              >
+                                <h3
+                                  className={`truncate font-semibold ${
+                                    active
+                                      ? 'text-[var(--accent)]'
+                                      : 'text-white'
+                                  }`}
+                                >
+                                  {
+                                    track.title
+                                  }
+                                </h3>
+
+                                <p className="mt-1 truncate text-sm text-white/50">
+                                  {
+                                    track.artistName
+                                  }
+                                </p>
+
+                                <p className="mt-1 truncate text-xs text-white/30">
+                                  {
+                                    track.albumTitle
+                                  }
+                                </p>
+                              </button>
+
+                              <div className="flex shrink-0 flex-col items-end gap-1">
+                                <span className="text-xs tabular-nums text-white/35">
+                                  {formatDuration(
+                                    track.durationSec,
+                                  )}
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onToggleLike(
+                                      track,
+                                    )
+                                  }}
+                                  aria-label={
+                                    isLiked(
+                                      track.id,
+                                    )
+                                      ? `Unlike ${track.title}`
+                                      : `Like ${track.title}`
+                                  }
+                                  className={`flex size-8 items-center justify-center rounded-full transition ${
+                                    isLiked(
+                                      track.id,
+                                    )
+                                      ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
+                                      : 'text-white/35 hover:bg-white/10 hover:text-white'
+                                  }`}
+                                >
+                                  <Heart
+                                    size={
+                                      15
+                                    }
+                                    className={
+                                      isLiked(
+                                        track.id,
+                                      )
+                                        ? 'fill-current'
+                                        : ''
+                                    }
+                                  />
+                                </button>
+                              </div>
+                            </article>
+                          )
+                        },
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-5 flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/10 px-6 text-center">
+                      <Music2
+                        className="text-white/25"
+                        size={36}
+                      />
+
+                      <h3 className="mt-4 font-semibold text-white">
+                        No matching
+                        songs found
+                      </h3>
+
+                      <p className="mt-2 text-sm text-white/45">
+                        The artist
+                        profile is
+                        available, but
+                        iTunes did not
+                        return a
+                        playable
+                        preview for
+                        this search.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
-          )}
 
-          {artists.length > 0 && (
-            <section>
-              <SectionHeading
-                eyebrow="Artists"
-                title="Artist profiles"
-                description={`${artists.length} matching MusicBrainz profiles`}
-              />
+            {otherArtists.length >
+              0 && (
+              <section>
+                <SectionHeading
+                  eyebrow="More artists"
+                  title="Other possible matches"
+                  description="Shown only when the search does not resolve to one exact artist."
+                />
 
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {artists.map((artist) => {
-                  const artistLocation =
-                    artist.area?.name ??
-                    artist.country ??
-                    'Location unavailable'
-
-                  return (
-                    <Link
-                      key={artist.id}
-                      to={`/artist/${artist.id}`}
-                      className="group rounded-3xl border border-white/10 bg-white/[0.045] p-5 shadow-xl shadow-black/10 backdrop-blur-xl transition hover:-translate-y-1 hover:border-[var(--accent)] hover:bg-white/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="flex size-14 shrink-0 items-center justify-center rounded-full border border-white/15 bg-[var(--accent-soft)] text-lg font-bold text-[var(--accent)] shadow-[0_0_24px_var(--accent-glow)]">
-                          {getArtistInitials(
-                            artist.name,
+                <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {otherArtists.map(
+                    (artist) => (
+                      <Link
+                        key={
+                          artist.id
+                        }
+                        to={`/artist/${artist.id}`}
+                        className="group flex items-center gap-4 rounded-3xl border border-white/10 bg-white/[0.045] p-5 transition hover:-translate-y-1 hover:border-[var(--accent)] hover:bg-white/[0.075]"
+                      >
+                        <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-[var(--accent-soft)] text-lg font-bold text-[var(--accent)]">
+                          {artist.imageUrl ? (
+                            <img
+                              src={
+                                artist.imageUrl
+                              }
+                              alt={`${artist.name} portrait`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            getArtistInitials(
+                              artist.name,
+                            )
                           )}
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <h3 className="truncate text-lg font-semibold text-white">
-                            {artist.name}
+                          <h3 className="truncate font-semibold text-white">
+                            {
+                              artist.name
+                            }
                           </h3>
 
-                          <p className="mt-1 text-sm text-white/45">
+                          <p className="mt-1 truncate text-sm text-white/45">
                             {artist.type ??
                               'Artist'}
                           </p>
                         </div>
-
-                        {typeof artist.score ===
-                          'number' && (
-                          <span className="shrink-0 rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-xs font-medium text-[var(--accent)]">
-                            {artist.score}%
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-5 flex items-center gap-2 text-sm text-white/50">
-                        <MapPin size={16} />
-
-                        <span className="truncate">
-                          {artistLocation}
-                        </span>
-                      </div>
-
-                      {artist.disambiguation && (
-                        <p className="mt-3 line-clamp-2 text-sm leading-5 text-white/40">
-                          {
-                            artist.disambiguation
-                          }
-                        </p>
-                      )}
-                    </Link>
-                  )
-                })}
-              </div>
-            </section>
-          )}
-        </div>
-      )}
+                      </Link>
+                    ),
+                  )}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
     </div>
   )
 }
@@ -1119,11 +1551,15 @@ interface TrackCardProps {
   currentTrack: Track | null
   isPlaying: boolean
   liked: boolean
+
   onPlay: (
     track: Track,
     queue: Track[],
   ) => void
-  onToggleLike: (track: Track) => void
+
+  onToggleLike: (
+    track: Track,
+  ) => void
 }
 
 function TrackCard({
@@ -1187,7 +1623,9 @@ function TrackCard({
           <Heart
             size={16}
             className={
-              liked ? 'fill-current' : ''
+              liked
+                ? 'fill-current'
+                : ''
             }
           />
         </button>
@@ -1195,7 +1633,10 @@ function TrackCard({
         <button
           type="button"
           onClick={() => {
-            onPlay(track, queue)
+            onPlay(
+              track,
+              queue,
+            )
           }}
           aria-label={
             activePlaying

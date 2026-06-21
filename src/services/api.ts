@@ -30,15 +30,16 @@ export interface SoundTrailArtist {
   country: string | null
   disambiguation: string | null
   score: number | null
+  imageUrl: string | null
+  bannerUrl: string | null
+  imageSourceUrl: string | null
   area: SoundTrailArtistArea | null
   beginArea: SoundTrailArtistArea | null
-
   lifeSpan: {
     begin: string | null
     end: string | null
     ended: boolean
   } | null
-
   genres: SoundTrailArtistGenre[]
   tags: SoundTrailArtistTag[]
   musicBrainzUrl: string
@@ -57,10 +58,6 @@ export interface SoundTrailTrack {
   musicBrainzUrl: string
 }
 
-/*
-  This represents one track returned by our
-  Express iTunes endpoint.
-*/
 interface ITunesTrackResponse {
   id: string
   title: string
@@ -113,22 +110,16 @@ interface ArtistTracksResponse {
   message?: string
 }
 
-/*
-  Reusable helper for making backend requests.
-*/
 async function requestJson<T>(
   path: string,
   signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(
-    `${API_BASE_URL}${path}`,
-    {
-      signal,
-      headers: {
-        Accept: 'application/json',
-      },
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    signal,
+    headers: {
+      Accept: 'application/json',
     },
-  )
+  })
 
   let data: unknown
 
@@ -152,15 +143,18 @@ async function requestJson<T>(
   return data as T
 }
 
-/*
-  Search MusicBrainz artists.
-*/
 export async function searchArtists(
   query: string,
   signal?: AbortSignal,
 ): Promise<SoundTrailArtist[]> {
+  const trimmedQuery = query.trim()
+
+  if (trimmedQuery.length < 2) {
+    return []
+  }
+
   const parameters = new URLSearchParams({
-    q: query.trim(),
+    q: trimmedQuery,
   })
 
   const data =
@@ -172,18 +166,18 @@ export async function searchArtists(
   return data.artists ?? []
 }
 
-/*
-  Search iTunes songs.
-
-  The backend response is converted into the existing
-  Track type used by the SoundTrail player.
-*/
 export async function searchTracks(
   query: string,
   signal?: AbortSignal,
 ): Promise<Track[]> {
+  const trimmedQuery = query.trim()
+
+  if (trimmedQuery.length < 2) {
+    return []
+  }
+
   const parameters = new URLSearchParams({
-    q: query.trim(),
+    q: trimmedQuery,
   })
 
   const data =
@@ -207,15 +201,11 @@ export async function searchTracks(
   }))
 }
 
-/*
-  Load one MusicBrainz artist.
-*/
 export async function getArtistDetails(
   artistId: string,
   signal?: AbortSignal,
 ): Promise<SoundTrailArtist> {
-  const encodedArtistId =
-    encodeURIComponent(artistId)
+  const encodedArtistId = encodeURIComponent(artistId)
 
   const data =
     await requestJson<ArtistDetailsResponse>(
@@ -226,15 +216,11 @@ export async function getArtistDetails(
   return data.artist
 }
 
-/*
-  Load MusicBrainz recordings for an artist.
-*/
 export async function getArtistTracks(
   artistId: string,
   signal?: AbortSignal,
 ): Promise<SoundTrailTrack[]> {
-  const encodedArtistId =
-    encodeURIComponent(artistId)
+  const encodedArtistId = encodeURIComponent(artistId)
 
   const data =
     await requestJson<ArtistTracksResponse>(
