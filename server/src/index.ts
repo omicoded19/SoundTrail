@@ -16,11 +16,61 @@ const app = express()
 
 const PORT = Number(process.env.PORT) || 4000
 
+/*
+  CLIENT_URL will contain the deployed frontend URL.
+
+  Multiple frontend URLs can be provided by separating
+  them with commas.
+*/
+const productionClientUrls = (
+  process.env.CLIENT_URL ?? ''
+)
+  .split(',')
+  .map((url) => url.trim())
+  .filter(Boolean)
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  ...productionClientUrls,
+]
+
 app.use(
   cors({
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:5174',
+    origin(origin, callback) {
+      /*
+        Requests without an Origin header include tools
+        such as Postman and Render's health checker.
+      */
+      if (!origin) {
+        callback(null, true)
+        return
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true)
+        return
+      }
+
+      callback(
+        new Error(
+          `Origin ${origin} is not allowed by CORS.`,
+        ),
+      )
+    },
+
+    methods: [
+      'GET',
+      'POST',
+      'PUT',
+      'PATCH',
+      'DELETE',
+      'OPTIONS',
+    ],
+
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
     ],
   }),
 )
@@ -28,7 +78,7 @@ app.use(
 app.use(express.json())
 
 /*
-  Confirms that the backend is running.
+  Health check.
 
   GET /api/health
 */
@@ -40,98 +90,111 @@ app.get('/api/health', (_request, response) => {
 })
 
 /*
-  Searches iTunes for playable tracks.
+  Search playable iTunes previews.
 
-  Example:
-  GET /api/search/tracks?q=Tum Hi Ho
+  GET /api/search/tracks?q=Arijit Singh
 */
-app.get('/api/search/tracks', async (request, response) => {
-  const query =
-    typeof request.query.q === 'string'
-      ? request.query.q.trim()
-      : ''
+app.get(
+  '/api/search/tracks',
+  async (request, response) => {
+    const query =
+      typeof request.query.q === 'string'
+        ? request.query.q.trim()
+        : ''
 
-  if (query.length < 2) {
-    response.status(400).json({
-      success: false,
-      message:
-        'Search query must contain at least two characters.',
-    })
+    if (query.length < 2) {
+      response.status(400).json({
+        success: false,
+        message:
+          'Search query must contain at least two characters.',
+      })
 
-    return
-  }
+      return
+    }
 
-  try {
-    const tracks = await searchITunesTracks(query)
+    try {
+      const tracks =
+        await searchITunesTracks(query)
 
-    response.json({
-      success: true,
-      query,
-      count: tracks.length,
-      tracks,
-    })
-  } catch (error) {
-    console.error('Track search failed:', error)
+      response.json({
+        success: true,
+        query,
+        count: tracks.length,
+        tracks,
+      })
+    } catch (error) {
+      console.error(
+        'Track search failed:',
+        error,
+      )
 
-    response.status(500).json({
-      success: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : 'Unable to search for tracks.',
-    })
-  }
-})
+      response.status(500).json({
+        success: false,
+
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to search for tracks.',
+      })
+    }
+  },
+)
 
 /*
-  Searches MusicBrainz for artists.
+  Search MusicBrainz artists.
 
-  Example:
   GET /api/search/artists?q=Arijit Singh
 */
-app.get('/api/search/artists', async (request, response) => {
-  const query =
-    typeof request.query.q === 'string'
-      ? request.query.q.trim()
-      : ''
+app.get(
+  '/api/search/artists',
+  async (request, response) => {
+    const query =
+      typeof request.query.q === 'string'
+        ? request.query.q.trim()
+        : ''
 
-  if (query.length < 2) {
-    response.status(400).json({
-      success: false,
-      message:
-        'Search query must contain at least two characters.',
-    })
+    if (query.length < 2) {
+      response.status(400).json({
+        success: false,
+        message:
+          'Search query must contain at least two characters.',
+      })
 
-    return
-  }
+      return
+    }
 
-  try {
-    const artists = await searchArtists(query)
+    try {
+      const artists =
+        await searchArtists(query)
 
-    response.json({
-      success: true,
-      query,
-      count: artists.length,
-      artists,
-    })
-  } catch (error) {
-    console.error('Artist search failed:', error)
+      response.json({
+        success: true,
+        query,
+        count: artists.length,
+        artists,
+      })
+    } catch (error) {
+      console.error(
+        'Artist search failed:',
+        error,
+      )
 
-    response.status(500).json({
-      success: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : 'Unable to search for artists.',
-    })
-  }
-})
+      response.status(500).json({
+        success: false,
+
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to search for artists.',
+      })
+    }
+  },
+)
 
 /*
-  Returns MusicBrainz recordings for one artist.
+  Get recordings belonging to one MusicBrainz artist.
 
-  Example:
-  GET /api/artists/ARTIST_ID/tracks
+  GET /api/artists/:artistId/tracks
 */
 app.get(
   '/api/artists/:artistId/tracks',
@@ -168,6 +231,7 @@ app.get(
 
       response.status(500).json({
         success: false,
+
         message:
           error instanceof Error
             ? error.message
@@ -178,10 +242,9 @@ app.get(
 )
 
 /*
-  Loads one artist using their MusicBrainz ID.
+  Get one MusicBrainz artist profile.
 
-  Example:
-  GET /api/artists/ARTIST_ID
+  GET /api/artists/:artistId
 */
 app.get(
   '/api/artists/:artistId',
@@ -232,8 +295,11 @@ app.get(
   },
 )
 
-app.listen(PORT, () => {
+/*
+  Render requires the server to listen on 0.0.0.0.
+*/
+app.listen(PORT, '0.0.0.0', () => {
   console.log(
-    `SoundTrail server running at http://localhost:${PORT}`,
+    `SoundTrail server running on port ${PORT}`,
   )
 })
