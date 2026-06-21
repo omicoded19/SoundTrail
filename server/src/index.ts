@@ -2,6 +2,11 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 
+import { connectDatabase } from './config/database.js'
+
+import authRouter from './routes/auth-routes.js'
+import likedSongsRouter from './routes/liked-songs-routes.js'
+
 import {
   getArtistDetails,
   getArtistRecordings,
@@ -15,9 +20,12 @@ dotenv.config()
 
 const app = express()
 
-const PORT = Number(process.env.PORT) || 4000
+const PORT =
+  Number(process.env.PORT) || 4000
 
-const productionClientUrls = (process.env.CLIENT_URL ?? '')
+const productionClientUrls = (
+  process.env.CLIENT_URL ?? ''
+)
   .split(',')
   .map((url) => url.trim())
   .filter(Boolean)
@@ -28,16 +36,13 @@ const allowedOrigins = [
   ...productionClientUrls,
 ]
 
-function normalizeArtistName(name: string) {
+function normalizeArtistName(
+  name: string,
+) {
   return name
     .trim()
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
 }
 
 function getArtistPriority(
@@ -45,42 +50,37 @@ function getArtistPriority(
   query: string,
 ) {
   const normalizedArtistName =
-    normalizeArtistName(artistName)
+    normalizeArtistName(
+      artistName,
+    )
 
   const normalizedQuery =
     normalizeArtistName(query)
 
-  if (normalizedArtistName === normalizedQuery) {
+  if (
+    normalizedArtistName ===
+    normalizedQuery
+  ) {
     return 0
   }
 
-  if (normalizedArtistName.startsWith(normalizedQuery)) {
+  if (
+    normalizedArtistName.startsWith(
+      normalizedQuery,
+    )
+  ) {
     return 1
   }
 
-  if (normalizedArtistName.includes(normalizedQuery)) {
+  if (
+    normalizedArtistName.includes(
+      normalizedQuery,
+    )
+  ) {
     return 2
   }
 
   return 3
-}
-
-async function getArtistImageSafely(name: string) {
-  try {
-    return await getArtistImage(name)
-  } catch (error) {
-    console.error(
-      `Artist image request failed for ${name}:`,
-      error,
-    )
-
-    return {
-      artistName: null,
-      imageUrl: null,
-      bannerUrl: null,
-      sourceUrl: null,
-    }
-  }
 }
 
 app.use(
@@ -91,7 +91,11 @@ app.use(
         return
       }
 
-      if (allowedOrigins.includes(origin)) {
+      if (
+        allowedOrigins.includes(
+          origin,
+        )
+      ) {
         callback(null, true)
         return
       }
@@ -102,6 +106,7 @@ app.use(
         ),
       )
     },
+
     methods: [
       'GET',
       'POST',
@@ -110,6 +115,7 @@ app.use(
       'DELETE',
       'OPTIONS',
     ],
+
     allowedHeaders: [
       'Content-Type',
       'Authorization',
@@ -119,6 +125,16 @@ app.use(
 
 app.use(express.json())
 
+app.use(
+  '/api/auth',
+  authRouter,
+)
+
+app.use(
+  '/api/library/liked',
+  likedSongsRouter,
+)
+
 app.get('/', (_request, response) => {
   response.json({
     success: true,
@@ -127,18 +143,23 @@ app.get('/', (_request, response) => {
   })
 })
 
-app.get('/api/health', (_request, response) => {
-  response.json({
-    success: true,
-    message: 'SoundTrail API is running',
-  })
-})
+app.get(
+  '/api/health',
+  (_request, response) => {
+    response.json({
+      success: true,
+      message:
+        'SoundTrail API is running',
+    })
+  },
+)
 
 app.get(
   '/api/search/tracks',
   async (request, response) => {
     const query =
-      typeof request.query.q === 'string'
+      typeof request.query.q ===
+      'string'
         ? request.query.q.trim()
         : ''
 
@@ -153,7 +174,10 @@ app.get(
     }
 
     try {
-      const tracks = await searchITunesTracks(query)
+      const tracks =
+        await searchITunesTracks(
+          query,
+        )
 
       response.json({
         success: true,
@@ -162,7 +186,10 @@ app.get(
         tracks,
       })
     } catch (error) {
-      console.error('Track search failed:', error)
+      console.error(
+        'Track search failed:',
+        error,
+      )
 
       response.status(500).json({
         success: false,
@@ -179,7 +206,8 @@ app.get(
   '/api/search/artists',
   async (request, response) => {
     const query =
-      typeof request.query.q === 'string'
+      typeof request.query.q ===
+      'string'
         ? request.query.q.trim()
         : ''
 
@@ -194,84 +222,124 @@ app.get(
     }
 
     try {
-      const artists = await searchArtists(query)
+      const artists =
+        await searchArtists(query)
 
-      const sortedArtists = [...artists].sort(
-        (firstArtist, secondArtist) => {
-          const firstPriority = getArtistPriority(
-            firstArtist.name,
-            query,
-          )
+      const sortedArtists = [
+        ...artists,
+      ].sort(
+        (
+          firstArtist,
+          secondArtist,
+        ) => {
+          const firstPriority =
+            getArtistPriority(
+              firstArtist.name,
+              query,
+            )
 
-          const secondPriority = getArtistPriority(
-            secondArtist.name,
-            query,
-          )
+          const secondPriority =
+            getArtistPriority(
+              secondArtist.name,
+              query,
+            )
 
-          if (firstPriority !== secondPriority) {
-            return firstPriority - secondPriority
+          if (
+            firstPriority !==
+            secondPriority
+          ) {
+            return (
+              firstPriority -
+              secondPriority
+            )
           }
 
           return (
-            (secondArtist.score ?? 0) -
-            (firstArtist.score ?? 0)
+            (secondArtist.score ??
+              0) -
+            (firstArtist.score ??
+              0)
           )
         },
       )
 
-      const normalizedQuery =
-        normalizeArtistName(query)
-
-      const exactArtist = sortedArtists.find(
-        (artist) =>
-          normalizeArtistName(artist.name) ===
-          normalizedQuery,
-      )
-
-      const visibleArtists = exactArtist
-        ? [exactArtist]
-        : sortedArtists.slice(0, 6)
+      const exactArtist =
+        sortedArtists.find(
+          (artist) =>
+            normalizeArtistName(
+              artist.name,
+            ) ===
+            normalizeArtistName(
+              query,
+            ),
+        )
 
       const primaryArtist =
-        visibleArtists[0] ?? null
+        exactArtist ??
+        sortedArtists[0] ??
+        null
 
-      const artistImage = primaryArtist
-        ? await getArtistImageSafely(
-            primaryArtist.name,
-          )
-        : {
-            artistName: null,
-            imageUrl: null,
-            bannerUrl: null,
-            sourceUrl: null,
-          }
+      const artistImage =
+        primaryArtist
+          ? await getArtistImage(
+              primaryArtist.name,
+            )
+          : {
+              artistName: null,
+              imageUrl: null,
+              bannerUrl: null,
+              sourceUrl: null,
+            }
 
-      const artistsWithImages = visibleArtists.map(
-        (artist, index) => ({
-          ...artist,
-          imageUrl:
-            index === 0
-              ? artistImage.imageUrl
-              : null,
-          bannerUrl:
-            index === 0
-              ? artistImage.bannerUrl
-              : null,
-          imageSourceUrl:
-            index === 0
-              ? artistImage.sourceUrl
-              : null,
-        }),
-      )
+      const artistsToReturn =
+        exactArtist
+          ? [exactArtist]
+          : sortedArtists.slice(
+              0,
+              6,
+            )
+
+      const artistsWithImages =
+        artistsToReturn.map(
+          (artist) => {
+            const isPrimaryArtist =
+              artist.id ===
+              primaryArtist?.id
+
+            return {
+              ...artist,
+
+              imageUrl:
+                isPrimaryArtist
+                  ? artistImage.imageUrl
+                  : null,
+
+              bannerUrl:
+                isPrimaryArtist
+                  ? artistImage.bannerUrl
+                  : null,
+
+              imageSourceUrl:
+                isPrimaryArtist
+                  ? artistImage.sourceUrl
+                  : null,
+            }
+          },
+        )
 
       response.json({
         success: true,
         query,
-        count: artistsWithImages.length,
-        artists: artistsWithImages,
+        count:
+          artistsWithImages.length,
+        artists:
+          artistsWithImages,
       })
     } catch (error) {
-      console.error('Artist search failed:', error)
+      console.error(
+        'Artist search failed:',
+        error,
+      )
 
       response.status(500).json({
         success: false,
@@ -288,14 +356,16 @@ app.get(
   '/api/artists/:artistId/tracks',
   async (request, response) => {
     const artistId =
-      typeof request.params.artistId === 'string'
+      typeof request.params
+        .artistId === 'string'
         ? request.params.artistId.trim()
         : ''
 
     if (!artistId) {
       response.status(400).json({
         success: false,
-        message: 'Artist ID is required.',
+        message:
+          'Artist ID is required.',
       })
 
       return
@@ -303,7 +373,9 @@ app.get(
 
     try {
       const tracks =
-        await getArtistRecordings(artistId)
+        await getArtistRecordings(
+          artistId,
+        )
 
       response.json({
         success: true,
@@ -332,31 +404,44 @@ app.get(
   '/api/artists/:artistId',
   async (request, response) => {
     const artistId =
-      typeof request.params.artistId === 'string'
+      typeof request.params
+        .artistId === 'string'
         ? request.params.artistId.trim()
         : ''
 
     if (!artistId) {
       response.status(400).json({
         success: false,
-        message: 'Artist ID is required.',
+        message:
+          'Artist ID is required.',
       })
 
       return
     }
 
     try {
-      const artist = await getArtistDetails(artistId)
+      const artist =
+        await getArtistDetails(
+          artistId,
+        )
 
       const artistImage =
-        await getArtistImageSafely(artist.name)
+        await getArtistImage(
+          artist.name,
+        )
 
       response.json({
         success: true,
+
         artist: {
           ...artist,
-          imageUrl: artistImage.imageUrl,
-          bannerUrl: artistImage.bannerUrl,
+
+          imageUrl:
+            artistImage.imageUrl,
+
+          bannerUrl:
+            artistImage.bannerUrl,
+
           imageSourceUrl:
             artistImage.sourceUrl,
         },
@@ -373,20 +458,42 @@ app.get(
           : 'Unable to load artist details.'
 
       const statusCode =
-        message === 'Artist was not found.'
+        message ===
+        'Artist was not found.'
           ? 404
           : 500
 
-      response.status(statusCode).json({
-        success: false,
-        message,
-      })
+      response
+        .status(statusCode)
+        .json({
+          success: false,
+          message,
+        })
     }
   },
 )
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(
-    `SoundTrail server running on port ${PORT}`,
-  )
-})
+async function startServer() {
+  try {
+    await connectDatabase()
+
+    app.listen(
+      PORT,
+      '0.0.0.0',
+      () => {
+        console.log(
+          `SoundTrail server running on port ${PORT}`,
+        )
+      },
+    )
+  } catch (error) {
+    console.error(
+      'SoundTrail server failed to start:',
+      error,
+    )
+
+    process.exit(1)
+  }
+}
+
+startServer()

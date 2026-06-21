@@ -1,26 +1,13 @@
-import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
-
-import { BottomMusicPlayer } from '@/components/player/BottomMusicPlayer'
-import { useGlobalPlayerShortcuts } from '@/features/player/useGlobalPlayerShortcuts'
-
-import {
-  applyAccentTheme,
-  getSavedAccentTheme,
-} from '@/features/theme/theme'
 
 import { MobileNav } from './MobileNav'
 import { Sidebar } from './Sidebar'
 
+import { BottomMusicPlayer } from '@/components/player/BottomMusicPlayer'
+import { useGlobalPlayerShortcuts } from '@/features/player/useGlobalPlayerShortcuts'
+
 export function AppShell() {
   useGlobalPlayerShortcuts()
-
-  useEffect(() => {
-    const savedTheme =
-      getSavedAccentTheme()
-
-    applyAccentTheme(savedTheme)
-  }, [])
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[var(--background)] text-[var(--text)]">
