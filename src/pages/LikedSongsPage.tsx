@@ -1,11 +1,16 @@
 import { Heart, Play, Trash2 } from 'lucide-react'
 
-import { tracks } from '@/data'
+import { tracks as mockTracks } from '@/data'
 import { usePlayerStore } from '@/features/player/player-store'
+import type { Track } from '@/types/track'
 
 export function LikedSongsPage() {
   const likedTrackIds = usePlayerStore(
     (state) => state.likedTrackIds,
+  )
+
+  const savedLikedTracks = usePlayerStore(
+    (state) => state.likedTracks,
   )
 
   const playTrack = usePlayerStore(
@@ -16,15 +21,38 @@ export function LikedSongsPage() {
     (state) => state.toggleLike,
   )
 
-  const likedTracks = tracks.filter((track) =>
-    likedTrackIds.includes(track.id),
+  /*
+    API tracks are loaded from likedTracks.
+
+    Mock tracks are retained so likes created using
+    the previous SoundTrail version still appear.
+  */
+  const likedTracks = likedTrackIds
+    .map((trackId) => {
+      return (
+        savedLikedTracks.find(
+          (track) => track.id === trackId,
+        ) ??
+        mockTracks.find(
+          (track) => track.id === trackId,
+        )
+      )
+    })
+    .filter((track): track is Track => Boolean(track))
+
+  /*
+    Only tracks containing a real preview URL should
+    enter the audio-player queue.
+  */
+  const playableLikedTracks = likedTracks.filter(
+    (track) => Boolean(track.previewUrl),
   )
 
   const handlePlayAll = () => {
-    const firstTrack = likedTracks[0]
+    const firstTrack = playableLikedTracks[0]
 
     if (firstTrack) {
-      playTrack(firstTrack, likedTracks)
+      playTrack(firstTrack, playableLikedTracks)
     }
   }
 
@@ -48,7 +76,7 @@ export function LikedSongsPage() {
         <button
           type="button"
           onClick={handlePlayAll}
-          disabled={likedTracks.length === 0}
+          disabled={playableLikedTracks.length === 0}
           className="flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 font-semibold text-black transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Play className="h-5 w-5 fill-current" />
@@ -65,61 +93,88 @@ export function LikedSongsPage() {
           </h2>
 
           <p className="mt-2 text-sm text-white/50">
-            Press the heart button in the player to save a track.
+            Play a song and press the heart button in the
+            player to save it here.
           </p>
         </section>
       ) : (
         <section className="mt-10 overflow-hidden rounded-3xl border border-white/10 bg-white/5">
-          {likedTracks.map((track, index) => (
-            <div
-              key={track.id}
-              className="flex items-center gap-4 border-b border-white/10 px-5 py-4 last:border-b-0 hover:bg-white/5"
-            >
-              <span className="w-6 text-sm text-white/30">
-                {index + 1}
-              </span>
+          {likedTracks.map((track, index) => {
+            const canPlay = Boolean(track.previewUrl)
 
-              <button
-                type="button"
-                onClick={() =>
-                  playTrack(track, likedTracks)
-                }
-                className="shrink-0"
-                aria-label={`Play ${track.title}`}
+            return (
+              <div
+                key={track.id}
+                className="flex items-center gap-4 border-b border-white/10 px-5 py-4 last:border-b-0 hover:bg-white/5"
               >
-                <img
-                  src={track.artworkUrl}
-                  alt={track.albumTitle}
-                  className="h-12 w-12 rounded-lg object-cover"
-                />
-              </button>
+                <span className="w-6 text-sm text-white/30">
+                  {index + 1}
+                </span>
 
-              <button
-                type="button"
-                onClick={() =>
-                  playTrack(track, likedTracks)
-                }
-                className="min-w-0 flex-1 text-left"
-              >
-                <p className="truncate font-medium text-white">
-                  {track.title}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (canPlay) {
+                      playTrack(
+                        track,
+                        playableLikedTracks,
+                      )
+                    }
+                  }}
+                  disabled={!canPlay}
+                  className="shrink-0 disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-label={
+                    canPlay
+                      ? `Play ${track.title}`
+                      : `Preview unavailable for ${track.title}`
+                  }
+                >
+                  <img
+                    src={track.artworkUrl}
+                    alt={track.albumTitle}
+                    className="h-12 w-12 rounded-lg object-cover"
+                  />
+                </button>
 
-                <p className="truncate text-sm text-white/50">
-                  {track.artistName}
-                </p>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (canPlay) {
+                      playTrack(
+                        track,
+                        playableLikedTracks,
+                      )
+                    }
+                  }}
+                  disabled={!canPlay}
+                  className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"
+                >
+                  <p className="truncate font-medium text-white">
+                    {track.title}
+                  </p>
 
-              <button
-                type="button"
-                onClick={() => toggleLike(track.id)}
-                aria-label={`Remove ${track.title} from liked songs`}
-                className="rounded-lg p-2 text-white/40 transition hover:bg-white/10 hover:text-red-300"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
+                  <p className="truncate text-sm text-white/50">
+                    {track.artistName}
+                  </p>
+
+                  <p className="mt-1 truncate text-xs text-white/30">
+                    {canPlay
+                      ? '30-second preview'
+                      : 'Preview unavailable'}
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => toggleLike(track)}
+                  aria-label={`Remove ${track.title} from liked songs`}
+                  className="rounded-lg p-2 text-white/40 transition hover:bg-white/10 hover:text-red-300"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            )
+          })}
         </section>
       )}
     </div>

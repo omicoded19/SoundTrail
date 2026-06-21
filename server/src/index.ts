@@ -6,8 +6,9 @@ import {
   getArtistDetails,
   getArtistRecordings,
   searchArtists,
-  searchRecordings,
 } from './services/musicbrainz.js'
+
+import { searchITunesTracks } from './services/itunes.js'
 
 dotenv.config()
 
@@ -39,7 +40,7 @@ app.get('/api/health', (_request, response) => {
 })
 
 /*
-  Searches for tracks using an ordinary text query.
+  Searches iTunes for playable tracks.
 
   Example:
   GET /api/search/tracks?q=Tum Hi Ho
@@ -61,7 +62,7 @@ app.get('/api/search/tracks', async (request, response) => {
   }
 
   try {
-    const tracks = await searchRecordings(query)
+    const tracks = await searchITunesTracks(query)
 
     response.json({
       success: true,
@@ -83,7 +84,7 @@ app.get('/api/search/tracks', async (request, response) => {
 })
 
 /*
-  Searches for artists.
+  Searches MusicBrainz for artists.
 
   Example:
   GET /api/search/artists?q=Arijit Singh
@@ -127,7 +128,7 @@ app.get('/api/search/artists', async (request, response) => {
 })
 
 /*
-  Returns recordings credited to one exact artist.
+  Returns MusicBrainz recordings for one artist.
 
   Example:
   GET /api/artists/ARTIST_ID/tracks
@@ -182,50 +183,54 @@ app.get(
   Example:
   GET /api/artists/ARTIST_ID
 */
-app.get('/api/artists/:artistId', async (request, response) => {
-  const artistId =
-    typeof request.params.artistId === 'string'
-      ? request.params.artistId.trim()
-      : ''
+app.get(
+  '/api/artists/:artistId',
+  async (request, response) => {
+    const artistId =
+      typeof request.params.artistId === 'string'
+        ? request.params.artistId.trim()
+        : ''
 
-  if (!artistId) {
-    response.status(400).json({
-      success: false,
-      message: 'Artist ID is required.',
-    })
+    if (!artistId) {
+      response.status(400).json({
+        success: false,
+        message: 'Artist ID is required.',
+      })
 
-    return
-  }
+      return
+    }
 
-  try {
-    const artist = await getArtistDetails(artistId)
+    try {
+      const artist =
+        await getArtistDetails(artistId)
 
-    response.json({
-      success: true,
-      artist,
-    })
-  } catch (error) {
-    console.error(
-      'Artist details request failed:',
-      error,
-    )
+      response.json({
+        success: true,
+        artist,
+      })
+    } catch (error) {
+      console.error(
+        'Artist details request failed:',
+        error,
+      )
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Unable to load artist details.'
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to load artist details.'
 
-    const statusCode =
-      message === 'Artist was not found.'
-        ? 404
-        : 500
+      const statusCode =
+        message === 'Artist was not found.'
+          ? 404
+          : 500
 
-    response.status(statusCode).json({
-      success: false,
-      message,
-    })
-  }
-})
+      response.status(statusCode).json({
+        success: false,
+        message,
+      })
+    }
+  },
+)
 
 app.listen(PORT, () => {
   console.log(

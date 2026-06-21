@@ -1,3 +1,5 @@
+import type { Track } from '@/types/track'
+
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ??
   'http://localhost:4000'
@@ -55,6 +57,27 @@ export interface SoundTrailTrack {
   musicBrainzUrl: string
 }
 
+/*
+  This represents one track returned by our
+  Express iTunes endpoint.
+*/
+interface ITunesTrackResponse {
+  id: string
+  title: string
+  artistId: string | null
+  artistName: string
+  albumId: string | null
+  albumTitle: string
+  artworkUrl: string
+  previewUrl: string | null
+  externalUrl: string | null
+  durationSec: number
+  releaseDate: string | null
+  genre: string | null
+  explicit: boolean
+  source: 'itunes'
+}
+
 interface ApiErrorResponse {
   success?: false
   message?: string
@@ -65,6 +88,14 @@ interface ArtistSearchResponse {
   query: string
   count: number
   artists: SoundTrailArtist[]
+  message?: string
+}
+
+interface TrackSearchResponse {
+  success: boolean
+  query: string
+  count: number
+  tracks: ITunesTrackResponse[]
   message?: string
 }
 
@@ -82,6 +113,9 @@ interface ArtistTracksResponse {
   message?: string
 }
 
+/*
+  Reusable helper for making backend requests.
+*/
 async function requestJson<T>(
   path: string,
   signal?: AbortSignal,
@@ -118,6 +152,9 @@ async function requestJson<T>(
   return data as T
 }
 
+/*
+  Search MusicBrainz artists.
+*/
 export async function searchArtists(
   query: string,
   signal?: AbortSignal,
@@ -135,6 +172,44 @@ export async function searchArtists(
   return data.artists ?? []
 }
 
+/*
+  Search iTunes songs.
+
+  The backend response is converted into the existing
+  Track type used by the SoundTrail player.
+*/
+export async function searchTracks(
+  query: string,
+  signal?: AbortSignal,
+): Promise<Track[]> {
+  const parameters = new URLSearchParams({
+    q: query.trim(),
+  })
+
+  const data =
+    await requestJson<TrackSearchResponse>(
+      `/api/search/tracks?${parameters.toString()}`,
+      signal,
+    )
+
+  return (data.tracks ?? []).map((track) => ({
+    id: track.id,
+    title: track.title,
+    artistId: track.artistId ?? '',
+    artistName: track.artistName,
+    albumId: track.albumId ?? '',
+    albumTitle: track.albumTitle,
+    artworkUrl: track.artworkUrl,
+    durationSec: track.durationSec,
+    previewUrl: track.previewUrl ?? undefined,
+    externalUrl: track.externalUrl ?? undefined,
+    source: track.source,
+  }))
+}
+
+/*
+  Load one MusicBrainz artist.
+*/
 export async function getArtistDetails(
   artistId: string,
   signal?: AbortSignal,
@@ -151,6 +226,9 @@ export async function getArtistDetails(
   return data.artist
 }
 
+/*
+  Load MusicBrainz recordings for an artist.
+*/
 export async function getArtistTracks(
   artistId: string,
   signal?: AbortSignal,

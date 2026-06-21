@@ -4,6 +4,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+
 import {
   Heart,
   ListMusic,
@@ -16,16 +17,16 @@ import {
   SkipForward,
 } from 'lucide-react'
 
-import { cn } from '@/lib/cn'
 import { usePlayerStore } from '@/features/player/player-store'
-import { useArtistStore } from '@/features/artist/artist-store'
-import { getArtistById } from '@/data'
+import { cn } from '@/lib/cn'
+
 import { PlayerProgressBar } from './PlayerProgressBar'
-import { PlayerVolumeControl } from './PlayerVolumeControl'
 import { PlayerQueueSheet } from './PlayerQueueSheet'
+import { PlayerVolumeControl } from './PlayerVolumeControl'
 
 export function BottomMusicPlayer() {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioRef =
+    useRef<HTMLAudioElement | null>(null)
 
   const [audioDuration, setAudioDuration] =
     useState(0)
@@ -101,17 +102,17 @@ export function BottomMusicPlayer() {
     (state) => state.toggleQueue,
   )
 
-  const activeArtistId = useArtistStore(
-    (state) => state.activeArtistId,
+  /*
+    The player now follows the accent colour selected
+    from the Settings page.
+
+    It no longer uses the old mock artist colour.
+  */
+  const accentColor = 'var(--accent)'
+
+  const hasPlayablePreview = Boolean(
+    currentTrack?.previewUrl,
   )
-
-  const artist = getArtistById(activeArtistId)
-
-  const accentColor =
-    artist?.accentColor ?? '#ffffff'
-
-  const hasPlayablePreview =
-    Boolean(currentTrack?.previewUrl)
 
   const duration =
     audioDuration > 0
@@ -123,7 +124,7 @@ export function BottomMusicPlayer() {
     : false
 
   /*
-    Change the audio source whenever the selected
+    Change the real audio source whenever the selected
     track changes.
   */
   useEffect(() => {
@@ -144,6 +145,7 @@ export function BottomMusicPlayer() {
       audio.removeAttribute('src')
       audio.load()
       pause()
+
       return
     }
 
@@ -157,8 +159,8 @@ export function BottomMusicPlayer() {
   ])
 
   /*
-    Synchronize Zustand's isPlaying value with
-    the real HTML audio element.
+    Synchronise Zustand's play state with the real
+    HTML audio element.
   */
   useEffect(() => {
     const audio = audioRef.current
@@ -170,22 +172,35 @@ export function BottomMusicPlayer() {
       return
     }
 
-    if (isPlaying) {
-      audio.play().catch((error: unknown) => {
-        console.error(
-          'Audio preview could not be played:',
-          error,
-        )
-
-        setAudioError(
-          'This audio preview could not be played.',
-        )
-
-        pause()
-      })
-    } else {
+    if (!isPlaying) {
       audio.pause()
+      return
     }
+
+    audio.play().catch((error: unknown) => {
+      /*
+        AbortError can happen normally when the user
+        changes tracks before the previous play request
+        has finished.
+      */
+      if (
+        error instanceof DOMException &&
+        error.name === 'AbortError'
+      ) {
+        return
+      }
+
+      console.error(
+        'Audio preview could not be played:',
+        error,
+      )
+
+      setAudioError(
+        'This audio preview could not be played.',
+      )
+
+      pause()
+    })
   }, [
     isPlaying,
     currentTrack?.id,
@@ -194,8 +209,8 @@ export function BottomMusicPlayer() {
   ])
 
   /*
-    Synchronize the stored volume with the
-    real audio element.
+    Keep the real audio element's volume equal to the
+    value saved in the player store.
   */
   useEffect(() => {
     const audio = audioRef.current
@@ -220,11 +235,13 @@ export function BottomMusicPlayer() {
     ) {
       setAudioDuration(audio.duration)
     }
+
+    setAudioError(null)
   }
 
   /*
-    Update Zustand progress from the real playback
-    position instead of using simulated time.
+    Update the Zustand progress value from the actual
+    audio playback position.
   */
   function handleTimeUpdate() {
     const audio = audioRef.current
@@ -239,7 +256,10 @@ export function BottomMusicPlayer() {
   function handleSeek(time: number) {
     const audio = audioRef.current
 
-    if (!audio || !hasPlayablePreview) {
+    if (
+      !audio ||
+      !hasPlayablePreview
+    ) {
       return
     }
 
@@ -260,18 +280,30 @@ export function BottomMusicPlayer() {
   function handleEnded() {
     const audio = audioRef.current
 
-    if (repeatMode === 'one' && audio) {
+    if (
+      repeatMode === 'one' &&
+      audio
+    ) {
       audio.currentTime = 0
       seek(0)
 
-      audio.play().catch((error: unknown) => {
-        console.error(
-          'Audio preview could not restart:',
-          error,
-        )
+      audio.play().catch(
+        (error: unknown) => {
+          if (
+            error instanceof DOMException &&
+            error.name === 'AbortError'
+          ) {
+            return
+          }
 
-        pause()
-      })
+          console.error(
+            'Audio preview could not restart:',
+            error,
+          )
+
+          pause()
+        },
+      )
 
       return
     }
@@ -292,40 +324,72 @@ export function BottomMusicPlayer() {
       <audio
         ref={audioRef}
         preload="metadata"
-        onLoadedMetadata={handleLoadedMetadata}
+        playsInline
+        onLoadedMetadata={
+          handleLoadedMetadata
+        }
+        onCanPlay={() => {
+          setAudioError(null)
+        }}
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
         onError={handleAudioError}
       />
 
       <footer
-        className="fixed bottom-[calc(64px+env(safe-area-inset-bottom))] left-0 right-0 z-30 border-t border-white/10 bg-black/40 backdrop-blur-2xl lg:bottom-0 lg:left-60"
         aria-label="Music player"
         role="region"
+        className="fixed bottom-[calc(64px+env(safe-area-inset-bottom))] left-0 right-0 z-30 overflow-hidden border-t border-white/15 bg-[rgba(10,10,15,0.72)] shadow-[0_-20px_60px_rgba(0,0,0,0.45)] backdrop-blur-[30px] backdrop-saturate-150 lg:bottom-0 lg:left-60"
       >
-        <div className="mx-auto flex min-h-[120px] max-w-[1600px] flex-col justify-center px-3 py-2 sm:px-4 lg:h-24 lg:min-h-0 lg:px-6">
+        {/*
+          Theme-coloured glow behind the glass player.
+        */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-25"
+          style={{
+            background:
+              'radial-gradient(circle at 50% 0%, var(--accent-glow), transparent 48%)',
+          }}
+        />
+
+        {/*
+          Subtle highlight at the top of the glass.
+        */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent"
+        />
+
+        <div className="relative z-10 mx-auto flex min-h-[120px] max-w-[1600px] flex-col justify-center px-3 py-2 sm:px-4 lg:h-24 lg:min-h-0 lg:px-6">
           {/* Desktop layout */}
-          <div className="hidden h-full items-center gap-4 md:grid md:grid-cols-[minmax(180px,1fr)_minmax(0,2fr)_minmax(180px,1fr)] md:items-center">
-            {/* Track information */}
+          <div className="hidden h-full items-center gap-4 md:grid md:grid-cols-[minmax(180px,1fr)_minmax(0,2fr)_minmax(180px,1fr)]">
+            {/* Current track */}
             <div className="flex min-w-0 items-center gap-3">
               {currentTrack ? (
                 <>
-                  {currentTrack.artworkUrl ? (
-                    <img
-                      src={currentTrack.artworkUrl}
-                      alt=""
-                      className="h-14 w-14 shrink-0 rounded-md object-cover shadow-lg"
-                    />
-                  ) : (
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-white/10 text-white/40">
-                      <ListMusic className="h-5 w-5" />
-                    </div>
-                  )}
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/15 bg-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.4)]">
+                    {currentTrack.artworkUrl ? (
+                      <img
+                        src={
+                          currentTrack.artworkUrl
+                        }
+                        alt={`${currentTrack.albumTitle} artwork`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-white/40">
+                        <ListMusic className="h-5 w-5" />
+                      </div>
+                    )}
+
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                  </div>
 
                   <div className="min-w-0">
                     <p
-                      className="truncate text-sm font-semibold text-white"
                       aria-live="polite"
+                      className="truncate text-sm font-semibold text-white"
                     >
                       {currentTrack.title}
                     </p>
@@ -335,13 +399,13 @@ export function BottomMusicPlayer() {
                     </p>
 
                     {!hasPlayablePreview && (
-                      <p className="mt-0.5 truncate text-[11px] text-amber-300/70">
+                      <p className="mt-0.5 truncate text-[11px] text-amber-300/80">
                         Preview unavailable
                       </p>
                     )}
 
                     {audioError && (
-                      <p className="mt-0.5 truncate text-[11px] text-red-300/70">
+                      <p className="mt-0.5 truncate text-[11px] text-red-300/80">
                         {audioError}
                       </p>
                     )}
@@ -349,36 +413,51 @@ export function BottomMusicPlayer() {
 
                   <button
                     type="button"
-                    onClick={() => toggleLike()}
-                    className={cn(
-                      'ml-1 shrink-0 rounded-full p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40',
-                      liked
-                        ? 'text-rose-400'
-                        : 'text-white/50 hover:text-white',
-                    )}
+                    onClick={() => {
+                      toggleLike()
+                    }}
                     aria-label={
                       liked
                         ? 'Unlike track'
                         : 'Like track'
                     }
                     aria-pressed={liked}
+                    className={cn(
+                      'ml-1 shrink-0 rounded-full border border-transparent p-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]',
+                      liked
+                        ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)] shadow-[0_0_18px_var(--accent-glow)]'
+                        : 'text-white/50 hover:border-white/10 hover:bg-white/10 hover:text-white',
+                    )}
                   >
                     <Heart
                       className={cn(
                         'h-4 w-4',
-                        liked && 'fill-current',
+                        liked &&
+                          'fill-current',
                       )}
                     />
                   </button>
                 </>
               ) : (
-                <p className="text-sm text-white/40">
-                  Select a track to play
-                </p>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/30">
+                    <ListMusic className="h-5 w-5" />
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-white/60">
+                      Select a track to play
+                    </p>
+
+                    <p className="mt-0.5 text-xs text-white/30">
+                      Search from Discover
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* Playback controls and progress */}
+            {/* Playback controls */}
             <div className="flex min-w-0 flex-col gap-2">
               <div className="flex items-center justify-center gap-2">
                 <ControlButton
@@ -402,7 +481,6 @@ export function BottomMusicPlayer() {
                   type="button"
                   onClick={togglePlay}
                   disabled={!hasPlayablePreview}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label={
                     !hasPlayablePreview
                       ? 'Preview unavailable'
@@ -410,6 +488,7 @@ export function BottomMusicPlayer() {
                         ? 'Pause'
                         : 'Play'
                   }
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-[var(--accent)] text-white shadow-[0_0_24px_var(--accent-glow)] transition hover:scale-105 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                 >
                   {isPlaying ? (
                     <Pause className="h-4 w-4 fill-current" />
@@ -428,7 +507,9 @@ export function BottomMusicPlayer() {
 
                 <ControlButton
                   onClick={cycleRepeat}
-                  active={repeatMode !== 'off'}
+                  active={
+                    repeatMode !== 'off'
+                  }
                   label={`Repeat: ${repeatMode}`}
                   disabled={!currentTrack}
                 >
@@ -450,10 +531,12 @@ export function BottomMusicPlayer() {
 
             {/* Volume and queue */}
             <div className="flex items-center justify-end gap-2">
-              <PlayerVolumeControl
-                volume={volume}
-                onChange={setVolume}
-              />
+              <div className="rounded-full border border-white/10 bg-white/[0.05] px-1 backdrop-blur-xl">
+                <PlayerVolumeControl
+                  volume={volume}
+                  onChange={setVolume}
+                />
+              </div>
 
               <ControlButton
                 onClick={toggleQueue}
@@ -474,24 +557,31 @@ export function BottomMusicPlayer() {
               accentColor={accentColor}
             />
 
-            <div className="flex items-center gap-3">
-              {currentTrack &&
-                (currentTrack.artworkUrl ? (
+            <div className="flex items-center gap-2">
+              {currentTrack ? (
+                currentTrack.artworkUrl ? (
                   <img
-                    src={currentTrack.artworkUrl}
-                    alt=""
-                    className="h-10 w-10 shrink-0 rounded object-cover"
+                    src={
+                      currentTrack.artworkUrl
+                    }
+                    alt={`${currentTrack.albumTitle} artwork`}
+                    className="h-10 w-10 shrink-0 rounded-lg border border-white/10 object-cover shadow-lg"
                   />
                 ) : (
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-white/10 text-white/40">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/10 text-white/40">
                     <ListMusic className="h-4 w-4" />
                   </div>
-                ))}
+                )
+              ) : (
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/30">
+                  <ListMusic className="h-4 w-4" />
+                </div>
+              )}
 
               <div className="min-w-0 flex-1">
                 <p
-                  className="truncate text-sm font-semibold text-white"
                   aria-live="polite"
+                  className="truncate text-sm font-semibold text-white"
                 >
                   {currentTrack?.title ??
                     'No track selected'}
@@ -504,28 +594,36 @@ export function BottomMusicPlayer() {
 
                 {currentTrack &&
                   !hasPlayablePreview && (
-                    <p className="truncate text-[10px] text-amber-300/70">
+                    <p className="truncate text-[10px] text-amber-300/80">
                       Preview unavailable
                     </p>
                   )}
+
+                {audioError && (
+                  <p className="truncate text-[10px] text-red-300/80">
+                    {audioError}
+                  </p>
+                )}
               </div>
 
               <button
                 type="button"
-                onClick={() => toggleLike()}
+                onClick={() => {
+                  toggleLike()
+                }}
                 disabled={!currentTrack}
-                className={cn(
-                  'shrink-0 rounded-full p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40',
-                  liked
-                    ? 'text-rose-400'
-                    : 'text-white/50',
-                )}
                 aria-label={
                   liked
                     ? 'Unlike track'
                     : 'Like track'
                 }
                 aria-pressed={liked}
+                className={cn(
+                  'shrink-0 rounded-full border border-transparent p-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:opacity-40',
+                  liked
+                    ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
+                    : 'text-white/50 hover:bg-white/10 hover:text-white',
+                )}
               >
                 <Heart
                   className={cn(
@@ -534,16 +632,6 @@ export function BottomMusicPlayer() {
                   )}
                 />
               </button>
-
-              <ControlButton
-                onClick={toggleShuffle}
-                active={isShuffle}
-                label="Toggle shuffle"
-                disabled={!currentTrack}
-                compact
-              >
-                <Shuffle className="h-4 w-4" />
-              </ControlButton>
 
               <ControlButton
                 onClick={previous}
@@ -558,7 +646,6 @@ export function BottomMusicPlayer() {
                 type="button"
                 onClick={togglePlay}
                 disabled={!hasPlayablePreview}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label={
                   !hasPlayablePreview
                     ? 'Preview unavailable'
@@ -566,6 +653,7 @@ export function BottomMusicPlayer() {
                       ? 'Pause'
                       : 'Play'
                 }
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/20 bg-[var(--accent)] text-white shadow-[0_0_18px_var(--accent-glow)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
               >
                 {isPlaying ? (
                   <Pause className="h-3.5 w-3.5 fill-current" />
@@ -584,9 +672,32 @@ export function BottomMusicPlayer() {
               </ControlButton>
 
               <ControlButton
+                onClick={toggleQueue}
+                label="Queue"
+                disabled={!currentTrack}
+                compact
+              >
+                <ListMusic className="h-4 w-4" />
+              </ControlButton>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <ControlButton
+                onClick={toggleShuffle}
+                active={isShuffle}
+                label="Toggle shuffle"
+                disabled={!currentTrack}
+                compact
+              >
+                <Shuffle className="h-4 w-4" />
+              </ControlButton>
+
+              <ControlButton
                 onClick={cycleRepeat}
-                active={repeatMode !== 'off'}
-                label="Repeat"
+                active={
+                  repeatMode !== 'off'
+                }
+                label={`Repeat: ${repeatMode}`}
                 disabled={!currentTrack}
                 compact
               >
@@ -602,15 +713,6 @@ export function BottomMusicPlayer() {
                 onChange={setVolume}
                 compact
               />
-
-              <ControlButton
-                onClick={toggleQueue}
-                label="Queue"
-                disabled={!currentTrack}
-                compact
-              >
-                <ListMusic className="h-4 w-4" />
-              </ControlButton>
             </div>
           </div>
         </div>
@@ -633,9 +735,9 @@ interface ControlButtonProps {
 function ControlButton({
   onClick,
   label,
-  active,
-  disabled,
-  compact,
+  active = false,
+  disabled = false,
+  compact = false,
   children,
 }: ControlButtonProps) {
   return (
@@ -643,13 +745,14 @@ function ControlButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={cn(
-        'rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-40',
-        compact ? 'p-1.5' : 'p-2',
-        active && 'text-white',
-      )}
       aria-label={label}
       aria-pressed={active}
+      className={cn(
+        'rounded-full border border-transparent text-white/65 transition hover:border-white/10 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-35',
+        compact ? 'p-1.5' : 'p-2',
+        active &&
+          'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)] shadow-[0_0_16px_var(--accent-glow)]',
+      )}
     >
       {children}
     </button>

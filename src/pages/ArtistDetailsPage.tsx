@@ -9,15 +9,20 @@ import {
   LoaderCircle,
   MapPin,
   Mic2,
+  Music2,
+  Pause,
+  Play,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 
+import { usePlayerStore } from '@/features/player/player-store'
+import { formatDuration } from '@/lib/format'
 import {
   getArtistDetails,
-  getArtistTracks,
+  searchTracks,
   type SoundTrailArtist,
-  type SoundTrailTrack,
 } from '@/services/api'
+import type { Track } from '@/types/track'
 
 function getArtistInitials(name: string) {
   return name
@@ -26,19 +31,6 @@ function getArtistInitials(name: string) {
     .map((word) => word[0])
     .join('')
     .toUpperCase()
-}
-
-function formatDuration(durationSec: number) {
-  if (durationSec <= 0) {
-    return 'Unknown'
-  }
-
-  const minutes = Math.floor(durationSec / 60)
-  const seconds = durationSec % 60
-
-  return `${minutes}:${seconds
-    .toString()
-    .padStart(2, '0')}`
 }
 
 export function ArtistDetailsPage() {
@@ -50,7 +42,7 @@ export function ArtistDetailsPage() {
     useState<SoundTrailArtist | null>(null)
 
   const [tracks, setTracks] =
-    useState<SoundTrailTrack[]>([])
+    useState<Track[]>([])
 
   const [isArtistLoading, setIsArtistLoading] =
     useState(true)
@@ -64,37 +56,89 @@ export function ArtistDetailsPage() {
   const [tracksError, setTracksError] =
     useState<string | null>(null)
 
+  const currentTrack = usePlayerStore(
+    (state) => state.currentTrack,
+  )
+
+  const isPlaying = usePlayerStore(
+    (state) => state.isPlaying,
+  )
+
+  const playTrack = usePlayerStore(
+    (state) => state.playTrack,
+  )
+
+  const togglePlay = usePlayerStore(
+    (state) => state.togglePlay,
+  )
+
   useEffect(() => {
     if (!artistId) {
       setArtistError('No artist ID was provided.')
       setTracksError('No artist ID was provided.')
       setIsArtistLoading(false)
       setIsTracksLoading(false)
+
       return
     }
 
-    /*
-      After this check, selectedArtistId is guaranteed
-      to be a string inside both async functions.
-    */
     const selectedArtistId = artistId
-
     const controller = new AbortController()
 
     setArtist(null)
     setTracks([])
+    setArtistError(null)
+    setTracksError(null)
+    setIsArtistLoading(true)
+    setIsTracksLoading(true)
 
-    async function loadArtist() {
+    async function loadPage() {
       try {
-        setIsArtistLoading(true)
-        setArtistError(null)
-
-        const artistResult = await getArtistDetails(
-          selectedArtistId,
-          controller.signal,
-        )
+        /*
+          MusicBrainz provides the artist profile.
+        */
+        const artistResult =
+          await getArtistDetails(
+            selectedArtistId,
+            controller.signal,
+          )
 
         setArtist(artistResult)
+        setIsArtistLoading(false)
+
+        try {
+          /*
+            iTunes provides artwork and playable
+            audio previews.
+          */
+          const trackResults =
+            await searchTracks(
+              artistResult.name,
+              controller.signal,
+            )
+
+          setTracks(trackResults)
+        } catch (requestError) {
+          if (
+            requestError instanceof DOMException &&
+            requestError.name === 'AbortError'
+          ) {
+            return
+          }
+
+          console.error(
+            'Playable artist tracks request failed:',
+            requestError,
+          )
+
+          setTracks([])
+
+          setTracksError(
+            requestError instanceof Error
+              ? requestError.message
+              : 'We could not load playable songs for this artist.',
+          )
+        }
       } catch (requestError) {
         if (
           requestError instanceof DOMException &&
@@ -109,6 +153,7 @@ export function ArtistDetailsPage() {
         )
 
         setArtist(null)
+        setTracks([])
 
         setArtistError(
           requestError instanceof Error
@@ -118,55 +163,41 @@ export function ArtistDetailsPage() {
       } finally {
         if (!controller.signal.aborted) {
           setIsArtistLoading(false)
-        }
-      }
-    }
-
-    async function loadTracks() {
-      try {
-        setIsTracksLoading(true)
-        setTracksError(null)
-
-        const trackResults = await getArtistTracks(
-          selectedArtistId,
-          controller.signal,
-        )
-
-        setTracks(trackResults)
-      } catch (requestError) {
-        if (
-          requestError instanceof DOMException &&
-          requestError.name === 'AbortError'
-        ) {
-          return
-        }
-
-        console.error(
-          'Artist tracks request failed:',
-          requestError,
-        )
-
-        setTracks([])
-
-        setTracksError(
-          requestError instanceof Error
-            ? requestError.message
-            : 'We could not load this artist’s recordings.',
-        )
-      } finally {
-        if (!controller.signal.aborted) {
           setIsTracksLoading(false)
         }
       }
     }
 
-    loadArtist()
-    loadTracks()
+    loadPage()
 
     return () => {
       controller.abort()
     }
   }, [artistId])
+
+  function handlePlayTrack(track: Track) {
+    if (!track.previewUrl) {
+      return
+    }
+
+    /*
+      Clicking the active track pauses or resumes it.
+    */
+    if (currentTrack?.id === track.id) {
+      togglePlay()
+      return
+    }
+
+    /*
+      Give the player every playable artist track
+      so next and previous continue working.
+    */
+    const playableQueue = tracks.filter(
+      (item) => Boolean(item.previewUrl),
+    )
+
+    playTrack(track, playableQueue)
+  }
 
   if (isArtistLoading && !artist) {
     return (
@@ -228,15 +259,13 @@ export function ArtistDetailsPage() {
     artist.country ??
     'Location unavailable'
 
-  let activeYears = 'Years unavailable'
-
-  if (artist.lifeSpan?.begin) {
-    activeYears = `${artist.lifeSpan.begin} – ${
-      artist.lifeSpan.ended
-        ? artist.lifeSpan.end ?? 'Unknown'
-        : 'Present'
-    }`
-  }
+  const activeYears = artist.lifeSpan?.begin
+    ? `${artist.lifeSpan.begin} – ${
+        artist.lifeSpan.ended
+          ? artist.lifeSpan.end ?? 'Unknown'
+          : 'Present'
+      }`
+    : 'Years unavailable'
 
   const genres = [...artist.genres]
     .sort((firstGenre, secondGenre) => {
@@ -288,20 +317,20 @@ export function ArtistDetailsPage() {
                 )}
 
                 <div className="mt-6 flex flex-wrap gap-3">
-                  <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-white/60">
+                  <span className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-white/60">
                     <MapPin size={16} />
                     {artistLocation}
-                  </div>
+                  </span>
 
-                  <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-white/60">
+                  <span className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-white/60">
                     <CalendarDays size={16} />
                     {activeYears}
-                  </div>
+                  </span>
 
-                  <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-white/60">
+                  <span className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-white/60">
                     <Mic2 size={16} />
                     {artist.type ?? 'Artist'}
-                  </div>
+                  </span>
                 </div>
 
                 <a
@@ -323,22 +352,22 @@ export function ArtistDetailsPage() {
                 Genres
               </h2>
 
-              {genres.length > 0 ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {genres.map((genre) => (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {genres.length > 0 ? (
+                  genres.map((genre) => (
                     <span
                       key={genre.id ?? genre.name}
                       className="rounded-full bg-violet-500/10 px-3 py-1.5 text-sm text-violet-300"
                     >
                       {genre.name}
                     </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-white/40">
-                  No genre information available.
-                </p>
-              )}
+                  ))
+                ) : (
+                  <p className="text-sm text-white/40">
+                    No genre information available.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div>
@@ -346,22 +375,22 @@ export function ArtistDetailsPage() {
                 Tags
               </h2>
 
-              {tags.length > 0 ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {tags.map((tag) => (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {tags.length > 0 ? (
+                  tags.map((tag) => (
                     <span
                       key={tag.name}
                       className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-white/60"
                     >
                       {tag.name}
                     </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-white/40">
-                  No tags available.
-                </p>
-              )}
+                  ))
+                ) : (
+                  <p className="text-sm text-white/40">
+                    No tags available.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -370,7 +399,7 @@ export function ArtistDetailsPage() {
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-sm font-medium uppercase tracking-[0.2em] text-violet-400">
-                Recordings
+                Playable previews
               </p>
 
               <h2 className="mt-2 text-2xl font-bold text-white">
@@ -380,7 +409,7 @@ export function ArtistDetailsPage() {
 
             {!isTracksLoading && !tracksError && (
               <span className="text-sm text-white/40">
-                {displayedTracks.length} recordings
+                {displayedTracks.length} songs
               </span>
             )}
           </div>
@@ -393,7 +422,7 @@ export function ArtistDetailsPage() {
               />
 
               <p className="mt-4 text-sm text-white/50">
-                Loading recordings...
+                Finding playable songs...
               </p>
             </div>
           )}
@@ -410,7 +439,7 @@ export function ArtistDetailsPage() {
 
               <div>
                 <h3 className="font-semibold">
-                  Recordings could not be loaded
+                  Songs could not be loaded
                 </h3>
 
                 <p className="mt-1 text-sm text-amber-200/70">
@@ -430,12 +459,12 @@ export function ArtistDetailsPage() {
                 />
 
                 <h3 className="mt-4 text-lg font-semibold text-white">
-                  No recordings found
+                  No playable previews found
                 </h3>
 
                 <p className="mt-2 text-sm text-white/50">
-                  MusicBrainz does not currently have
-                  recordings connected to this artist.
+                  Try searching for this artist directly
+                  on the Discover page.
                 </p>
               </div>
             )}
@@ -444,49 +473,93 @@ export function ArtistDetailsPage() {
             !tracksError &&
             displayedTracks.length > 0 && (
               <div className="mt-6 grid gap-4 md:grid-cols-2">
-                {displayedTracks.map((track, index) => (
-                  <article
-                    key={track.id}
-                    className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-violet-400/30 hover:bg-white/[0.07]"
-                  >
-                    <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-sm font-semibold text-violet-300">
-                      {index + 1}
-                    </div>
+                {displayedTracks.map((track) => {
+                  const isActive =
+                    currentTrack?.id === track.id
 
-                    <div className="min-w-0 flex-1">
-                      <h3 className="truncate font-semibold text-white">
-                        {track.title}
-                      </h3>
+                  const isCurrentlyPlaying =
+                    isActive && isPlaying
 
-                      <p className="mt-1 truncate text-sm text-white/45">
-                        {track.albumTitle}
-                      </p>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-white/35">
-                        <span className="flex items-center gap-1">
-                          <Clock3 size={13} />
-                          {formatDuration(track.durationSec)}
-                        </span>
-
-                        {track.firstReleaseDate && (
-                          <span>
-                            {track.firstReleaseDate}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <a
-                      href={track.musicBrainzUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label={`Open ${track.title} on MusicBrainz`}
-                      className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 text-white/45 transition hover:border-violet-400/30 hover:bg-violet-500/10 hover:text-violet-300"
+                  return (
+                    <article
+                      key={track.id}
+                      className="group flex min-w-0 items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-3 transition hover:border-violet-400/30 hover:bg-white/[0.07]"
                     >
-                      <ExternalLink size={17} />
-                    </a>
-                  </article>
-                ))}
+                      <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-white/10">
+                        {track.artworkUrl ? (
+                          <img
+                            src={track.artworkUrl}
+                            alt={`${track.albumTitle} artwork`}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <Music2
+                              className="text-white/30"
+                              size={24}
+                            />
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handlePlayTrack(track)
+                          }}
+                          disabled={!track.previewUrl}
+                          aria-label={
+                            isCurrentlyPlaying
+                              ? `Pause ${track.title}`
+                              : `Play ${track.title}`
+                          }
+                          className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed"
+                        >
+                          {isCurrentlyPlaying ? (
+                            <Pause
+                              className="fill-white text-white"
+                              size={25}
+                            />
+                          ) : (
+                            <Play
+                              className="fill-white text-white"
+                              size={25}
+                            />
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate font-semibold text-white">
+                          {track.title}
+                        </h3>
+
+                        <p className="mt-1 truncate text-sm text-white/50">
+                          {track.albumTitle}
+                        </p>
+
+                        <p className="mt-2 flex items-center gap-1 text-xs text-white/35">
+                          <Clock3 size={13} />
+                          {formatDuration(
+                            track.durationSec,
+                          )}
+                        </p>
+                      </div>
+
+                      {track.externalUrl && (
+                        <a
+                          href={track.externalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`Open ${track.title} externally`}
+                          className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 text-white/45 transition hover:border-violet-400/30 hover:bg-violet-500/10 hover:text-violet-300"
+                        >
+                          <ExternalLink size={17} />
+                        </a>
+                      )}
+                    </article>
+                  )
+                })}
               </div>
             )}
         </section>

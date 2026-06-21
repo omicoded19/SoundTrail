@@ -1,72 +1,201 @@
 import {
   useEffect,
   useState,
-  type SubmitEvent,
+  type FormEvent,
 } from 'react'
 
 import {
   ListMusic,
+  Music2,
   Play,
   Plus,
   Trash2,
   X,
 } from 'lucide-react'
 
-import { tracks } from '@/data'
+import { tracks as mockTracks } from '@/data'
 import { usePlayerStore } from '@/features/player/player-store'
 import type { Track } from '@/types/track'
 
 type Playlist = {
   id: string
   name: string
-  trackIds: string[]
+  tracks: Track[]
+}
+
+/*
+  This type is used while reading playlists saved
+  by both the old and new SoundTrail versions.
+*/
+type SavedPlaylist = {
+  id?: unknown
+  name?: unknown
+  trackIds?: unknown
+  tracks?: unknown
 }
 
 const STORAGE_KEY = 'soundtrail-playlists'
 
+/*
+  Check whether a value loaded from localStorage
+  contains the minimum required Track properties.
+*/
+function isTrack(value: unknown): value is Track {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const track = value as Partial<Track>
+
+  return (
+    typeof track.id === 'string' &&
+    typeof track.title === 'string' &&
+    typeof track.artistName === 'string' &&
+    typeof track.albumTitle === 'string' &&
+    typeof track.artworkUrl === 'string' &&
+    typeof track.durationSec === 'number'
+  )
+}
+
+/*
+  Load saved playlists.
+
+  This also converts older playlists that stored only
+  track IDs into the new complete-track format.
+*/
+function loadPlaylists(): Playlist[] {
+  const savedPlaylists =
+    localStorage.getItem(STORAGE_KEY)
+
+  if (!savedPlaylists) {
+    return []
+  }
+
+  try {
+    const parsedValue: unknown =
+      JSON.parse(savedPlaylists)
+
+    if (!Array.isArray(parsedValue)) {
+      return []
+    }
+
+    return parsedValue
+      .map((value): Playlist | null => {
+        if (!value || typeof value !== 'object') {
+          return null
+        }
+
+        const savedPlaylist =
+          value as SavedPlaylist
+
+        if (
+          typeof savedPlaylist.id !== 'string' ||
+          typeof savedPlaylist.name !== 'string'
+        ) {
+          return null
+        }
+
+        /*
+          New playlist format.
+        */
+        if (Array.isArray(savedPlaylist.tracks)) {
+          return {
+            id: savedPlaylist.id,
+            name: savedPlaylist.name,
+            tracks:
+              savedPlaylist.tracks.filter(isTrack),
+          }
+        }
+
+        /*
+          Old playlist format.
+
+          Older playlists contained only mock track IDs.
+        */
+        const oldTrackIds = Array.isArray(
+          savedPlaylist.trackIds,
+        )
+          ? savedPlaylist.trackIds.filter(
+              (trackId): trackId is string =>
+                typeof trackId === 'string',
+            )
+          : []
+
+        const migratedTracks = oldTrackIds
+          .map((trackId) =>
+            mockTracks.find(
+              (track) => track.id === trackId,
+            ),
+          )
+          .filter(
+            (track): track is Track =>
+              track !== undefined,
+          )
+
+        return {
+          id: savedPlaylist.id,
+          name: savedPlaylist.name,
+          tracks: migratedTracks,
+        }
+      })
+      .filter(
+        (playlist): playlist is Playlist =>
+          playlist !== null,
+      )
+  } catch {
+    return []
+  }
+}
+
+/*
+  Remove duplicate tracks from a collection.
+*/
+function getUniqueTracks(
+  tracks: Track[],
+): Track[] {
+  const uniqueTracks =
+    new Map<string, Track>()
+
+  for (const track of tracks) {
+    uniqueTracks.set(track.id, track)
+  }
+
+  return [...uniqueTracks.values()]
+}
+
 export function PlaylistsPage() {
+  const currentTrack = usePlayerStore(
+    (state) => state.currentTrack,
+  )
+
+  const likedTracks = usePlayerStore(
+    (state) => state.likedTracks,
+  )
+
   const playTrack = usePlayerStore(
     (state) => state.playTrack,
   )
 
-  const [playlistName, setPlaylistName] = useState('')
-
-  const [selectedTrackId, setSelectedTrackId] =
+  const [playlistName, setPlaylistName] =
     useState('')
 
-  /*
-    Load saved playlists from localStorage when
-    the page first opens.
-  */
-  const [playlists, setPlaylists] = useState<Playlist[]>(() => {
-    const savedPlaylists = localStorage.getItem(STORAGE_KEY)
+  const [
+    selectedTrackId,
+    setSelectedTrackId,
+  ] = useState('')
 
-    if (!savedPlaylists) {
-      return []
-    }
+  const [playlists, setPlaylists] =
+    useState<Playlist[]>(loadPlaylists)
 
-    try {
-      const parsedPlaylists = JSON.parse(savedPlaylists)
-
-      return Array.isArray(parsedPlaylists)
-        ? parsedPlaylists
-        : []
-    } catch {
-      return []
-    }
-  })
+  const [
+    activePlaylistId,
+    setActivePlaylistId,
+  ] = useState<string | null>(
+    () => playlists[0]?.id ?? null,
+  )
 
   /*
-    Select the first saved playlist initially.
-
-    If there are no playlists, the value will be null.
-  */
-  const [activePlaylistId, setActivePlaylistId] = useState<
-    string | null
-  >(() => playlists[0]?.id ?? null)
-
-  /*
-    Save playlists whenever the playlists array changes.
+    Save complete playlist data whenever it changes.
   */
   useEffect(() => {
     localStorage.setItem(
@@ -75,39 +204,49 @@ export function PlaylistsPage() {
     )
   }, [playlists])
 
-  /*
-    Find the currently selected playlist.
-  */
   const activePlaylist = playlists.find(
-    (playlist) => playlist.id === activePlaylistId,
+    (playlist) =>
+      playlist.id === activePlaylistId,
   )
 
-  /*
-    Convert the selected playlist's track IDs
-    into complete track objects.
-  */
-  const playlistTracks = activePlaylist
-    ? activePlaylist.trackIds
-        .map((trackId) =>
-          tracks.find((track) => track.id === trackId),
-        )
-        .filter((track): track is Track => Boolean(track))
-    : []
+  const playlistTracks =
+    activePlaylist?.tracks ?? []
 
   /*
-    Hide tracks that are already inside
-    the selected playlist.
+    A song is available for playlists when:
+
+    1. It is currently selected in the player.
+    2. It has been added to Liked Songs.
+  */
+  const personalLibrary = getUniqueTracks([
+    ...(currentTrack ? [currentTrack] : []),
+    ...likedTracks,
+  ])
+
+  /*
+    Hide songs already added to the selected playlist.
   */
   const availableTracks = activePlaylist
-    ? tracks.filter(
+    ? personalLibrary.filter(
         (track) =>
-          !activePlaylist.trackIds.includes(track.id),
+          !activePlaylist.tracks.some(
+            (playlistTrack) =>
+              playlistTrack.id === track.id,
+          ),
       )
     : []
 
-  const handleCreatePlaylist = (
-    event: SubmitEvent<HTMLFormElement>,
-  ) => {
+  /*
+    Only playable previews enter the player queue.
+  */
+  const playablePlaylistTracks =
+    playlistTracks.filter(
+      (track) => Boolean(track.previewUrl),
+    )
+
+  function handleCreatePlaylist(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault()
 
     const trimmedName = playlistName.trim()
@@ -119,7 +258,7 @@ export function PlaylistsPage() {
     const newPlaylist: Playlist = {
       id: crypto.randomUUID(),
       name: trimmedName,
-      trackIds: [],
+      tracks: [],
     }
 
     setPlaylists((currentPlaylists) => [
@@ -127,38 +266,57 @@ export function PlaylistsPage() {
       newPlaylist,
     ])
 
-    /*
-      Immediately select the newly created playlist.
-    */
     setActivePlaylistId(newPlaylist.id)
-
     setPlaylistName('')
     setSelectedTrackId('')
   }
 
-  const handleAddTrack = () => {
+  function handleAddTrack() {
     if (!activePlaylist || !selectedTrackId) {
       return
     }
 
+    const selectedTrack = personalLibrary.find(
+      (track) =>
+        track.id === selectedTrackId,
+    )
+
+    if (!selectedTrack) {
+      return
+    }
+
     setPlaylists((currentPlaylists) =>
-      currentPlaylists.map((playlist) =>
-        playlist.id === activePlaylist.id
-          ? {
-              ...playlist,
-              trackIds: [
-                ...playlist.trackIds,
-                selectedTrackId,
-              ],
-            }
-          : playlist,
-      ),
+      currentPlaylists.map((playlist) => {
+        if (
+          playlist.id !== activePlaylist.id
+        ) {
+          return playlist
+        }
+
+        const alreadyAdded =
+          playlist.tracks.some(
+            (track) =>
+              track.id === selectedTrack.id,
+          )
+
+        if (alreadyAdded) {
+          return playlist
+        }
+
+        return {
+          ...playlist,
+          tracks: [
+            ...playlist.tracks,
+            selectedTrack,
+          ],
+        }
+      }),
     )
 
     setSelectedTrackId('')
   }
 
-  const handleRemoveTrack = (trackId: string) => {
+  function handleRemoveTrack(trackId: string) {
     if (!activePlaylist) {
       return
     }
@@ -168,34 +326,31 @@ export function PlaylistsPage() {
         playlist.id === activePlaylist.id
           ? {
               ...playlist,
-              trackIds: playlist.trackIds.filter(
-                (id) => id !== trackId,
-              ),
+
+              tracks:
+                playlist.tracks.filter(
+                  (track) =>
+                    track.id !== trackId,
+                ),
             }
           : playlist,
       ),
     )
   }
 
-  const handleDeletePlaylist = () => {
+  function handleDeletePlaylist() {
     if (!activePlaylist) {
       return
     }
 
-    /*
-      Remove the selected playlist.
-    */
-    const remainingPlaylists = playlists.filter(
-      (playlist) => playlist.id !== activePlaylist.id,
-    )
+    const remainingPlaylists =
+      playlists.filter(
+        (playlist) =>
+          playlist.id !== activePlaylist.id,
+      )
 
     setPlaylists(remainingPlaylists)
 
-    /*
-      Select the first remaining playlist.
-
-      If no playlists remain, select null.
-    */
     setActivePlaylistId(
       remainingPlaylists[0]?.id ?? null,
     )
@@ -203,12 +358,27 @@ export function PlaylistsPage() {
     setSelectedTrackId('')
   }
 
-  const handlePlayPlaylist = () => {
-    const firstTrack = playlistTracks[0]
+  function handlePlayPlaylist() {
+    const firstTrack =
+      playablePlaylistTracks[0]
 
     if (firstTrack) {
-      playTrack(firstTrack, playlistTracks)
+      playTrack(
+        firstTrack,
+        playablePlaylistTracks,
+      )
     }
+  }
+
+  function handlePlayTrack(track: Track) {
+    if (!track.previewUrl) {
+      return
+    }
+
+    playTrack(
+      track,
+      playablePlaylistTracks,
+    )
   }
 
   return (
@@ -223,13 +393,12 @@ export function PlaylistsPage() {
         </div>
 
         <p className="mt-3 text-white/60">
-          Organise your favourite tracks into personal
+          Organise real searched tracks into personal
           collections.
         </p>
       </header>
 
       <div className="grid gap-8 lg:grid-cols-[300px_1fr]">
-        {/* Playlist sidebar */}
         <aside className="space-y-5">
           <form
             onSubmit={handleCreatePlaylist}
@@ -246,9 +415,11 @@ export function PlaylistsPage() {
               id="playlist-name"
               type="text"
               value={playlistName}
-              onChange={(event) =>
-                setPlaylistName(event.target.value)
-              }
+              onChange={(event) => {
+                setPlaylistName(
+                  event.target.value,
+                )
+              }}
               placeholder="Night Drive"
               className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-[var(--accent)]"
             />
@@ -265,14 +436,18 @@ export function PlaylistsPage() {
           <div className="space-y-2">
             {playlists.map((playlist) => {
               const isActive =
-                playlist.id === activePlaylistId
+                playlist.id ===
+                activePlaylistId
 
               return (
                 <button
                   key={playlist.id}
                   type="button"
                   onClick={() => {
-                    setActivePlaylistId(playlist.id)
+                    setActivePlaylistId(
+                      playlist.id,
+                    )
+
                     setSelectedTrackId('')
                   }}
                   className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition ${
@@ -286,7 +461,7 @@ export function PlaylistsPage() {
                   </span>
 
                   <span className="text-xs text-white/30">
-                    {playlist.trackIds.length}
+                    {playlist.tracks.length}
                   </span>
                 </button>
               )
@@ -294,7 +469,6 @@ export function PlaylistsPage() {
           </div>
         </aside>
 
-        {/* Selected playlist */}
         <main>
           {!activePlaylist ? (
             <div className="rounded-3xl border border-dashed border-white/10 p-12 text-center">
@@ -305,7 +479,8 @@ export function PlaylistsPage() {
               </h2>
 
               <p className="mt-2 text-sm text-white/50">
-                Create your first playlist using the form.
+                Create your first playlist using the
+                form.
               </p>
             </div>
           ) : (
@@ -328,7 +503,9 @@ export function PlaylistsPage() {
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={handleDeletePlaylist}
+                    onClick={
+                      handleDeletePlaylist
+                    }
                     className="rounded-full border border-white/10 p-3 text-white/50 transition hover:bg-white/10 hover:text-red-300"
                     aria-label="Delete playlist"
                   >
@@ -337,8 +514,13 @@ export function PlaylistsPage() {
 
                   <button
                     type="button"
-                    onClick={handlePlayPlaylist}
-                    disabled={playlistTracks.length === 0}
+                    onClick={
+                      handlePlayPlaylist
+                    }
+                    disabled={
+                      playablePlaylistTracks.length ===
+                      0
+                    }
                     className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-semibold text-black transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Play className="h-5 w-5 fill-current" />
@@ -347,25 +529,36 @@ export function PlaylistsPage() {
                 </div>
               </header>
 
-              {/* Add track */}
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <select
                   value={selectedTrackId}
-                  onChange={(event) =>
-                    setSelectedTrackId(event.target.value)
+                  onChange={(event) => {
+                    setSelectedTrackId(
+                      event.target.value,
+                    )
+                  }}
+                  disabled={
+                    availableTracks.length === 0
                   }
-                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#171717] px-4 py-3 text-white outline-none focus:border-[var(--accent)]"
+                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#171717] px-4 py-3 text-white outline-none focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <option value="">Select a track</option>
+                  <option value="">
+                    {availableTracks.length > 0
+                      ? 'Select a liked or current track'
+                      : 'Like or play a song first'}
+                  </option>
 
-                  {availableTracks.map((track) => (
-                    <option
-                      key={track.id}
-                      value={track.id}
-                    >
-                      {track.title} — {track.artistName}
-                    </option>
-                  ))}
+                  {availableTracks.map(
+                    (track) => (
+                      <option
+                        key={track.id}
+                        value={track.id}
+                      >
+                        {track.title} —{' '}
+                        {track.artistName}
+                      </option>
+                    ),
+                  )}
                 </select>
 
                 <button
@@ -379,67 +572,110 @@ export function PlaylistsPage() {
                 </button>
               </div>
 
-              {/* Playlist tracks */}
+              {personalLibrary.length === 0 && (
+                <p className="mt-3 text-sm text-white/40">
+                  Search for a song in Discover,
+                  play or like it, and it will become
+                  available here.
+                </p>
+              )}
+
               {playlistTracks.length === 0 ? (
                 <div className="mt-8 rounded-2xl border border-dashed border-white/10 p-10 text-center">
-                  <p className="text-white/50">
-                    This playlist is empty. Add a track above.
+                  <Music2 className="mx-auto h-10 w-10 text-white/20" />
+
+                  <p className="mt-4 text-white/50">
+                    This playlist is empty. Add a
+                    track above.
                   </p>
                 </div>
               ) : (
                 <div className="mt-8 divide-y divide-white/10">
-                  {playlistTracks.map((track, index) => (
-                    <div
-                      key={track.id}
-                      className="flex items-center gap-4 py-4"
-                    >
-                      <span className="w-5 text-sm text-white/30">
-                        {index + 1}
-                      </span>
+                  {playlistTracks.map(
+                    (track, index) => {
+                      const canPlay =
+                        Boolean(
+                          track.previewUrl,
+                        )
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          playTrack(track, playlistTracks)
-                        }
-                        className="shrink-0"
-                        aria-label={`Play ${track.title}`}
-                      >
-                        <img
-                          src={track.artworkUrl}
-                          alt={track.albumTitle}
-                          className="h-12 w-12 rounded-lg object-cover"
-                        />
-                      </button>
+                      return (
+                        <div
+                          key={track.id}
+                          className="flex items-center gap-4 py-4"
+                        >
+                          <span className="w-5 text-sm text-white/30">
+                            {index + 1}
+                          </span>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          playTrack(track, playlistTracks)
-                        }
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <p className="truncate font-medium text-white">
-                          {track.title}
-                        </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handlePlayTrack(
+                                track,
+                              )
+                            }}
+                            disabled={!canPlay}
+                            className="shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={
+                              canPlay
+                                ? `Play ${track.title}`
+                                : `Preview unavailable for ${track.title}`
+                            }
+                          >
+                            <img
+                              src={
+                                track.artworkUrl
+                              }
+                              alt={
+                                track.albumTitle
+                              }
+                              className="h-12 w-12 rounded-lg object-cover"
+                            />
+                          </button>
 
-                        <p className="truncate text-sm text-white/50">
-                          {track.artistName}
-                        </p>
-                      </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handlePlayTrack(
+                                track,
+                              )
+                            }}
+                            disabled={!canPlay}
+                            className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"
+                          >
+                            <p className="truncate font-medium text-white">
+                              {track.title}
+                            </p>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleRemoveTrack(track.id)
-                        }
-                        className="rounded-lg p-2 text-white/40 transition hover:bg-white/10 hover:text-red-300"
-                        aria-label={`Remove ${track.title}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
+                            <p className="truncate text-sm text-white/50">
+                              {
+                                track.artistName
+                              }
+                            </p>
+
+                            <p className="mt-1 text-xs text-white/30">
+                              {canPlay
+                                ? '30-second preview'
+                                : 'Preview unavailable'}
+                            </p>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleRemoveTrack(
+                                track.id,
+                              )
+                            }}
+                            className="rounded-lg p-2 text-white/40 transition hover:bg-white/10 hover:text-red-300"
+                            aria-label={`Remove ${track.title}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )
+                    },
+                  )}
                 </div>
               )}
             </section>

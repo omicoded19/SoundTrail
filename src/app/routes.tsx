@@ -1,13 +1,14 @@
 import { createBrowserRouter } from 'react-router-dom'
+
 import { AppShell } from '@/components/layout/AppShell'
 
-import { HomePage } from '@/pages/HomePage'
-import { DiscoverPage } from '@/pages/DiscoverPage'
 import { ArtistDetailsPage } from '@/pages/ArtistDetailsPage'
-import { JournalPage } from '@/pages/JournalPage'
-import { AIDJPage } from '@/pages/AIDJPage'
+import { DiscoverPage } from '@/pages/DiscoverPage'
+import { HomePage } from '@/pages/HomePage'
 import { InsightsPage } from '@/pages/InsightsPage'
+import { JournalPage } from '@/pages/JournalPage'
 import { LikedSongsPage } from '@/pages/LikedSongsPage'
+import { NotFoundPage } from '@/pages/NotFoundPage'
 import { PlaylistsPage } from '@/pages/PlaylistsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
@@ -15,6 +16,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppShell />,
+
     children: [
       {
         index: true,
@@ -33,10 +35,6 @@ export const router = createBrowserRouter([
         element: <JournalPage />,
       },
       {
-        path: 'ai-dj',
-        element: <AIDJPage />,
-      },
-      {
         path: 'insights',
         element: <InsightsPage />,
       },
@@ -51,6 +49,10 @@ export const router = createBrowserRouter([
       {
         path: 'settings',
         element: <SettingsPage />,
+      },
+      {
+        path: '*',
+        element: <NotFoundPage />,
       },
     ],
   },

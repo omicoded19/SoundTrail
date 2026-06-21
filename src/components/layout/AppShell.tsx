@@ -1,32 +1,23 @@
 import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 
-import { Sidebar } from './Sidebar'
-import { MobileNav } from './MobileNav'
 import { BottomMusicPlayer } from '@/components/player/BottomMusicPlayer'
-
-import { useSimulatedPlayback } from '@/features/player/useSimulatedPlayback'
+import { useGlobalPlayerShortcuts } from '@/features/player/useGlobalPlayerShortcuts'
 
 import {
   applyAccentTheme,
   getSavedAccentTheme,
 } from '@/features/theme/theme'
 
+import { MobileNav } from './MobileNav'
+import { Sidebar } from './Sidebar'
+
 export function AppShell() {
-  /*
-    Keeps the mock player progress moving while a track
-    is marked as playing.
-  */
-  useSimulatedPlayback()
+  useGlobalPlayerShortcuts()
 
-  /*
-    Runs once when the application loads.
-
-    It reads the saved theme from localStorage
-    and applies it to the root HTML element.
-  */
   useEffect(() => {
-    const savedTheme = getSavedAccentTheme()
+    const savedTheme =
+      getSavedAccentTheme()
 
     applyAccentTheme(savedTheme)
   }, [])
