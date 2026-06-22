@@ -159,8 +159,8 @@ export function HomePage() {
     (state) => state.toggleLike,
   )
 
-  const isLiked = usePlayerStore(
-    (state) => state.isLiked,
+  const likedTrackIds = usePlayerStore(
+    (state) => state.likedTrackIds,
   )
 
   const [artistTracks, setArtistTracks] =
@@ -197,10 +197,6 @@ export function HomePage() {
       )
 
     async function loadArtistSongs() {
-      /*
-        Wait until the effect setup completes before
-        changing React state.
-      */
       await Promise.resolve()
 
       if (controller.signal.aborted) {
@@ -309,14 +305,11 @@ export function HomePage() {
 
         albumMap.set(albumKey, {
           id: albumKey,
-
           title:
             track.albumTitle ||
             'Unknown album',
-
           artworkUrl:
             track.artworkUrl,
-
           tracks: [track],
         })
       }
@@ -412,7 +405,7 @@ export function HomePage() {
   }
 
   const liked =
-    isLiked(currentTrack.id)
+    likedTrackIds.includes(currentTrack.id)
 
   const displayedTracks =
     displayedArtistTracks.slice(
@@ -521,14 +514,15 @@ export function HomePage() {
 
               <button
                 type="button"
-                onClick={() =>
-                  toggleLike()
-                }
+                onClick={() => {
+                  void toggleLike()
+                }}
                 aria-label={
                   liked
                     ? `Unlike ${currentTrack.title}`
                     : `Like ${currentTrack.title}`
                 }
+                aria-pressed={liked}
                 className={`flex size-11 items-center justify-center rounded-full border transition ${
                   liked
                     ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)] shadow-[0_0_18px_var(--accent-glow)]'

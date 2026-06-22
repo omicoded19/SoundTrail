@@ -6,6 +6,7 @@ import { connectDatabase } from './config/database.js'
 
 import authRouter from './routes/auth-routes.js'
 import likedSongsRouter from './routes/liked-songs-routes.js'
+import playlistsRouter from './routes/playlists-routes.js'
 
 import {
   getArtistDetails,
@@ -55,7 +56,9 @@ function getArtistPriority(
     )
 
   const normalizedQuery =
-    normalizeArtistName(query)
+    normalizeArtistName(
+      query,
+    )
 
   if (
     normalizedArtistName ===
@@ -133,6 +136,11 @@ app.use(
 app.use(
   '/api/library/liked',
   likedSongsRouter,
+)
+
+app.use(
+  '/api/playlists',
+  playlistsRouter,
 )
 
 app.get('/', (_request, response) => {
@@ -496,4 +504,4 @@ async function startServer() {
   }
 }
 
-startServer()
+void startServer()
